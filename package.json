@@ -1,0 +1,17 @@
+{
+  "name": "letterboxd-stremio-addon",
+  "version": "1.0.0",
+  "description": "Letterboxd watchlist catalogs for Stremio. Multi-user, free to host.",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "node test/smoke.js",
+    "deploy:cf": "npx wrangler deploy",
+    "deploy:netlify": "npx netlify-cli deploy --prod"
+  }
+}
