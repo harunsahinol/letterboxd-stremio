@@ -17,7 +17,7 @@ export function configurePage(origin, cfg, sorts) {
   * { box-sizing: border-box; }
   body { margin:0; min-height:100vh; background:var(--bg); color:var(--text);
          font:16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-         display:flex; align-items:center; justify-content:center; padding:24px 16px; }
+         display:flex; align-items:center; justify-content:center; padding:24px 16px 96px; }
   main { width:100%; max-width:460px; background:var(--card); border:1px solid var(--line);
          border-radius:14px; padding:28px; }
   .dots { display:flex; gap:6px; margin-bottom:14px; }
@@ -64,7 +64,10 @@ export function configurePage(origin, cfg, sorts) {
     <button class="secondary disabled" id="copy" data-t="copy">Copy manifest URL</button>
   </div>
   <code id="url" hidden></code>
-  <footer data-t="footer">Not affiliated with Letterboxd or Stremio.</footer>
+  <footer>
+    <a href="https://github.com/harunsahinol/letterboxd-stremio" target="_blank" rel="noopener" data-t="source">Open source on GitHub</a>
+    · <span data-t="footer">Not affiliated with Letterboxd or Stremio.</span>
+  </footer>
 </main>
 <script>
 const ORIGIN = ${JSON.stringify(origin)};
@@ -81,7 +84,8 @@ const T = {
     copied: "Kopyalandı!", checking: "Kontrol ediliyor…", found: (u, n) => u + ": " + n + " film bulundu",
     notfound: (u) => u + ": kullanıcı bulunamadı ya da watchlist gizli", upstream: (u) => u + ": Letterboxd'a şu an ulaşılamadı (yine de yükleyebilirsin)",
     invalid: (u) => u + ": geçersiz kullanıcı adı",
-    footer: "Letterboxd veya Stremio ile bağlantılı değildir."
+    footer: "Letterboxd veya Stremio ile bağlantılı değildir.",
+    source: "GitHub'da açık kaynak"
   },
   en: {
     copied: "Copied!", checking: "Checking…", found: (u, n) => u + ": " + n + " films found",

@@ -1,102 +1,128 @@
-# Letterboxd Watchlist → Stremio
+<div align="center">
 
-Herhangi bir **herkese açık** Letterboxd watchlist'ini Stremio'da katalog olarak gösteren, çok kullanıcılı, ücretsiz barındırılabilen eklenti.
+# Letterboxd Watchlist for Stremio
 
-- Hesap, veritabanı, API anahtarı yok. Her kullanıcının ayarı kendi kurulum adresinin içinde saklanır.
-- Birden fazla kullanıcı adı girilebilir (arkadaşlarının watchlist'leri ayrı kataloglar olarak gelir).
-- Filmler IMDb ID'leriyle döner, yani Cinemeta ve kurulu tüm stream eklentileri doğrudan çalışır.
-- Sıralama: son eklenen, ilk eklenen, isim, çıkış yılı (yeni/eski), günlük karışık. Stremio Keşfet ekranındaki menüden de değiştirilebilir.
+**Your Letterboxd watchlist, right inside Stremio.**<br>
+Free, open source, no account or API key needed.
 
-## Mimari
+[![Install](https://img.shields.io/badge/Install-letterboxd--stremio.netlify.app-00e054?style=for-the-badge)](https://letterboxd-stremio.netlify.app/configure)
+
+[![Netlify Status](https://img.shields.io/badge/hosted%20on-Netlify-00C7B7?logo=netlify&logoColor=white)](https://letterboxd-stremio.netlify.app)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+![Node](https://img.shields.io/badge/node-%3E%3D18-339933?logo=node.js&logoColor=white)
+![No dependencies](https://img.shields.io/badge/dependencies-0-brightgreen)
+
+[English](#features) · [Türkçe](#türkçe)
+
+<img src="docs/configure-en.png" alt="Configure page" width="420">
+
+</div>
+
+## Features
+
+- **Any public watchlist.** Yours, your friends', anyone's — just type the username.
+- **Multiple users.** Separate usernames with commas; each gets its own catalog.
+- **Works with your other addons.** Films come back with IMDb IDs, so Cinemeta and every stream addon you have work as usual.
+- **Sorting.** Recently added, oldest added, title, release year (newest / oldest), daily shuffle. Change it any time from the dropdown on Stremio's Discover page.
+- **Fast.** Responses are cached on Netlify's CDN; a film's IMDb mapping is cached for 30 days and shared across all users.
+- **Private by design.** No database, no accounts, no tracking. Your settings live only in your own install URL.
+
+## Install
+
+1. Open **[letterboxd-stremio.netlify.app](https://letterboxd-stremio.netlify.app/configure)**.
+2. Type your Letterboxd username (your watchlist must be public).
+3. Click **Install in Stremio** (desktop / mobile app) or **Install in Stremio Web**.
+
+The catalog shows up on Stremio's **Board** and **Discover** pages.
+
+## How it works
 
 ```
-Kullanıcı ──► /configure  (kullanıcı adı + sıralama seçer)
+Browser ──► /configure            pick username(s) + sort order
                 │
                 ▼
-   https://SUNUCU/<base64url ayar>/manifest.json   ◄── Stremio bunu yükler
+https://…/<base64url settings>/manifest.json   ◄── installed in Stremio
                 │
-   Stremio ──► /<ayar>/catalog/movie/lbxd-watchlist-<kullanıcı>.json?skip=..
+Stremio ──► /<settings>/catalog/movie/lbxd-watchlist-<user>.json
                 │
-                ├─ letterboxd.com/<kullanıcı>/watchlist/page/N/   (tüm sayfalar, 15 dk önbellek)
-                └─ letterboxd.com/film/<slug>/                    (IMDb/TMDB ID + poster, 30 gün önbellek)
+                ├─ letterboxd.com/<user>/watchlist/page/N/   all pages, cached 15 min
+                └─ letterboxd.com/film/<slug>/               IMDb/TMDB ID + poster, cached 30 days
 ```
 
-- **Durumsuz (stateless):** Sunucu kimseyi saklamaz; ayar URL'de. Bu yüzden tek bir ücretsiz sunucu herkese hizmet verebilir.
-- **Önbellek:** Bellek içi LRU + Netlify CDN önbelleği (`Netlify-CDN-Cache-Control: durable`). Aynı katalog isteği tüm kenar sunucularda önbellekten döner, fonksiyon hiç çalışmaz. Bir film bir kez çözüldüğünde tüm kullanıcılar için hazırdır; popüler filmler neredeyse hiç Letterboxd'a tekrar istek atmaz.
-- **Kademeli çözümleme:** Her istekte en fazla N film sayfası çekilir; çözülemeyenler `lbxd:<slug>` ID'siyle döner ve eklentinin kendi `meta` uç noktası bunları açınca çözer (`defaultVideoId` ile stream eklentilerine IMDb ID'si iletilir). Arka planda sonraki sayfalar ısıtılır.
-- **Sıralama yerel:** Letterboxd'un `/by/release/` gibi sıralı adresleri Cloudflare tarafından botlara kapalı, o yüzden liste bir kez çekilip eklenti içinde sıralanıyor.
+- **Stateless.** The server stores nothing about users, so one free instance can serve everyone.
+- **Gradual resolution.** Each request resolves up to N film pages within a time budget (Netlify's free plan has a 10 s limit). Anything not resolved yet is returned as `lbxd:<slug>`; the addon's own `meta` endpoint resolves it on open and passes the IMDb ID to stream addons via `defaultVideoId`. Remaining pages are warmed up in the background.
+- **Local sorting.** Letterboxd's sorted URLs (`/by/release/` …) are blocked for bots, so the list is fetched once and sorted inside the addon.
 
-| Dosya | Görev |
+| File | Purpose |
 |---|---|
-| `src/addon.js` | Platformdan bağımsız çekirdek: manifest, catalog, meta, yönlendirme |
-| `src/letterboxd.js` | Watchlist ve film sayfası ayrıştırma |
-| `src/cache.js` | Bellek + (Workers'ta) Cache API önbelleği |
-| `src/configure.js` | Kurulum sayfası (TR/EN otomatik) |
-| `src/server.js` | Node sunucusu (yerel, Render, Koyeb, Docker…) |
-| `netlify/functions/addon.js` + `netlify.toml` | Netlify |
-| `src/worker.js` + `wrangler.toml` | Cloudflare Workers (deneysel) |
+| [`src/addon.js`](src/addon.js) | Platform-independent core: manifest, catalog, meta, routing |
+| [`src/letterboxd.js`](src/letterboxd.js) | Watchlist and film page parsing |
+| [`src/cache.js`](src/cache.js) | In-memory LRU (+ Cache API on Workers) |
+| [`src/configure.js`](src/configure.js) | Configure page (English / Turkish, auto-detected) |
+| [`netlify/functions/addon.js`](netlify/functions/addon.js) | Netlify adapter |
+| [`src/server.js`](src/server.js) | Plain Node server (local, Render, Koyeb, Docker…) |
+| [`src/worker.js`](src/worker.js) | Cloudflare Workers adapter (experimental) |
 
-## Yerelde çalıştırma
+## Self-hosting
 
-```bash
-npm install
-```
+Want your own instance? It's free.
+
+[![Deploy to Netlify](https://www.netlify.com/img/deploy/button.svg)](https://app.netlify.com/start/deploy?repository=https://github.com/harunsahinol/letterboxd-stremio)
+
+**Netlify (recommended):** click the button above, or fork the repo and import it at [app.netlify.com](https://app.netlify.com). No build settings needed — everything is in [`netlify.toml`](netlify.toml).
+
+**Locally:**
 
 ```bash
 npm start
 ```
 
-Sonra `http://localhost:7001/configure` adresini aç. Canlı Letterboxd'a karşı hızlı test:
+Then open <http://localhost:7001/configure>. (Port 7000 is avoided because macOS AirPlay uses it.) Quick smoke test against live Letterboxd:
 
 ```bash
-npm test -- kullanici_adin
+npm test -- your_username
 ```
 
-> Stremio masaüstü uygulaması `http://localhost` eklentilerini kabul eder; telefondan / TV'den kullanmak için HTTPS ile yayınlaman gerekir (aşağıda).
+**Docker / Render / Koyeb / Railway:** start command `npm start`, or use the included [`Dockerfile`](Dockerfile). Note that Render's free plan sleeps after 15 minutes of inactivity.
 
-## Ücretsiz yayınlama (herkes kullansın diye)
+**Cloudflare Workers (experimental):** `npx wrangler deploy`. The free plan's 50-subrequest limit means large watchlists fill in over a few refreshes.
 
-### 1) Netlify (önerilen — ücretsiz plan, uyumaz, HTTPS dahil)
+## Limitations
 
-1. Bu klasörü bir GitHub deposuna yükle.
-2. [app.netlify.com](https://app.netlify.com) → **Add new site → Import an existing project** → GitHub → depoyu seç.
-3. Ayarlar `netlify.toml`'dan otomatik okunur (build komutu yok, fonksiyon klasörü `netlify/functions`). **Deploy**'a bas.
-4. `https://<site-adi>.netlify.app/configure` adresini paylaş. Bu kadar.
+- The watchlist must be **public**. Letterboxd's official API isn't open to the public, so private lists can't be read.
+- Rare films with no IMDb link on Letterboxd show up as `lbxd:` items; they open with Letterboxd info but may have no streams.
+- If Letterboxd changes its HTML, `parseWatchlistPage` / `parseFilmPage` in `src/letterboxd.js` need updating. Issues and PRs are welcome.
 
-CLI ile (GitHub olmadan):
+---
 
-```bash
-npx netlify-cli login
-```
+## Türkçe
 
-```bash
-npx netlify-cli deploy --prod
-```
+Herhangi bir **herkese açık** Letterboxd watchlist'ini Stremio'da katalog olarak gösteren, ücretsiz ve açık kaynak eklenti.
 
-Notlar:
-- Netlify'ın ücretsiz planında fonksiyonlar en fazla 10 sn çalışabiliyor. Eklenti bu yüzden ~6 sn sonra yeni film sayfası çekmeyi bırakıp elindekini döndürüyor; kalanlar arka planda ve sonraki istekte tamamlanıyor.
-- Ücretsiz planın aylık bir kullanım kotası var. CDN önbelleği isteklerin çoğunu fonksiyona hiç uğratmadan karşıladığı için normal kullanımda bu kotaya yaklaşmak zor; kendi panelinden takip edebilirsin.
+<div align="center"><img src="docs/configure-tr.png" alt="Kurulum sayfası" width="420"></div>
 
-### 2) Render / Koyeb / Railway (Node veya Docker)
+### Kurulum
 
-- **Build:** `npm install` · **Start:** `npm start` (ya da hazır `Dockerfile`).
-- Render'ın ücretsiz planı 15 dk hareketsizlikten sonra uyur; ilk istek ~30 sn sürebilir ve Stremio bu sırada zaman aşımına düşebilir. Ücretsiz bir uptime servisiyle (ör. UptimeRobot) `/manifest.json`'a 10 dakikada bir istek atarak uyanık tutabilirsin.
+1. **[letterboxd-stremio.netlify.app](https://letterboxd-stremio.netlify.app/configure)** adresini aç.
+2. Letterboxd kullanıcı adını yaz (watchlist herkese açık olmalı).
+3. **Stremio'ya yükle** ya da **Stremio Web'e yükle** butonuna bas.
 
-### 3) Cloudflare Workers (deneysel)
+### Özellikler
 
-```bash
-npx wrangler deploy
-```
+- Hesap, veritabanı, API anahtarı yok. Ayarların sadece kendi kurulum adresinde durur.
+- Virgülle ayırarak birden fazla kullanıcı ekleyebilirsin; arkadaşlarının listeleri ayrı katalog olarak gelir.
+- Filmler IMDb ID'leriyle döner, yani Cinemeta ve kurulu tüm stream eklentileri normal çalışır.
+- Sıralama: son eklenen, ilk eklenen, isim, çıkış yılı (yeni/eski), günlük karışık. Stremio'nun Keşfet sayfasındaki menüden de değiştirilebilir.
 
-Ücretsiz planda istek başına 50 alt-istek sınırı olduğu için büyük watchlist'ler birkaç yenilemede tamamlanır. Ayrıca Letterboxd, Cloudflare IP'lerinden gelen istekleri zaman zaman engelleyebilir; sorun yaşarsan Netlify'ı kullan.
+### Kendi sunucunda çalıştırma
 
-## Sınırlar ve notlar
+Yukarıdaki **Deploy to Netlify** butonuna bas ya da repoyu fork'layıp [app.netlify.com](https://app.netlify.com)'da içe aktar; ek ayar gerekmez. Yerelde `npm start` ile çalıştırıp <http://localhost:7001/configure> adresini aç.
 
-- Watchlist **herkese açık** olmalı. Gizli listeler okunamaz (Letterboxd'un resmî API'si genel kullanıma kapalı).
-- Letterboxd'da IMDb bağlantısı olmayan nadir filmler `lbxd:` ID'siyle görünür; açınca Letterboxd bilgileri gösterilir ama stream bulunamayabilir.
-- Letterboxd HTML yapısını değiştirirse `src/letterboxd.js` içindeki `parseWatchlistPage` / `parseFilmPage` güncellenmelidir (eski ve yeni poster işaretlemesi destekleniyor).
-- Letterboxd veya Stremio ile bağlantılı değildir. Letterboxd'u yormamak için önbellek süreleri bilerek uzun tutuldu.
+### Sınırlar
 
-## Lisans
+- Watchlist herkese açık olmalı; gizli listeler okunamaz.
+- Letterboxd'da IMDb bağlantısı olmayan nadir filmler `lbxd:` ID'siyle görünür ve stream bulunamayabilir.
 
-MIT
+---
+
+<sub>Not affiliated with Letterboxd or Stremio. Cache times are intentionally long to be gentle on Letterboxd. · MIT License</sub>

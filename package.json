@@ -4,6 +4,17 @@
   "description": "Letterboxd watchlist catalogs for Stremio. Multi-user, free to host.",
   "type": "module",
   "license": "MIT",
+  "homepage": "https://letterboxd-stremio.netlify.app",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/harunsahinol/letterboxd-stremio.git"
+  },
+  "keywords": [
+    "stremio",
+    "stremio-addon",
+    "letterboxd",
+    "watchlist"
+  ],
   "engines": {
     "node": ">=18"
   },
