@@ -7,7 +7,8 @@ export default {
   async fetch(request, env, ctx) {
     setCacheBackend(cloudflareCacheBackend());
     return handle(request, {
-      maxResolvePerRequest: 20,
+      maxResolvePerRequest: 15,
+      maxWatchedPerRequest: 10,
       maxBackgroundResolve: 20,
       waitUntil: (p) => ctx.waitUntil(p.catch(() => {})),
     });

@@ -191,10 +191,11 @@ function toMeta(item, film, cfg) {
   };
 }
 
-// Shared per-request budget for Letterboxd fetches (film pages + watched checks).
-function makeBudget(opts) {
+// Per-request budget for Letterboxd fetches. Film pages and watched checks get
+// separate budgets so one can't starve the other; both share the deadline.
+function makeBudget(opts, max) {
   const deadline = opts.start + (opts.deadlineMs || Infinity);
-  let left = opts.maxResolvePerRequest;
+  let left = max;
   return () => (left > 0 && Date.now() < deadline ? (left--, true) : false);
 }
 
@@ -216,7 +217,8 @@ async function catalog(cfg, id, extra, opts) {
   const sortKey = Object.keys(src.sorts).find((k) => src.sorts[k] === extra.genre) || cfg.sort;
   const skip = Math.max(0, parseInt(extra.skip || "0", 10) || 0);
   let all = sortItems(src.items, sortKey, src.seed);
-  const spend = makeBudget(opts);
+  const spendFilm = makeBudget(opts, opts.maxResolvePerRequest);
+  const spendWatched = makeBudget(opts, opts.maxWatchedPerRequest);
   let complete = true;
 
   // Hide watched: drop everything already known to be watched before paging,
@@ -238,7 +240,7 @@ async function catalog(cfg, id, extra, opts) {
     const keep = await mapLimit(chunk, 8, async (it) => {
       if (!watched) return true;
       if ((await peekWatched(cfg.me, it.slug)) != null) return !(await peekWatched(cfg.me, it.slug));
-      if (!spend()) return (complete = false), true;
+      if (!spendWatched()) return (complete = false), true;
       try {
         return !(await checkWatched(cfg.me, it.slug));
       } catch {
@@ -250,7 +252,7 @@ async function catalog(cfg, id, extra, opts) {
 
   const metas = await mapLimit(page, 8, async (item) => {
     let film = await peekFilm(item.slug);
-    if (!film && spend()) film = await getFilm(item.slug).catch(() => null);
+    if (!film && spendFilm()) film = await getFilm(item.slug).catch(() => null);
     if (!film) complete = false;
     return toMeta(item, film, cfg);
   });
@@ -365,7 +367,13 @@ async function resolveShortLink(input) {
   return r.headers.get("location") || input;
 }
 
-const DEFAULT_OPTS = { maxResolvePerRequest: 100, maxBackgroundResolve: 300, deadlineMs: 0, waitUntil: null };
+const DEFAULT_OPTS = {
+  maxResolvePerRequest: 100,
+  maxWatchedPerRequest: 60,
+  maxBackgroundResolve: 300,
+  deadlineMs: 0,
+  waitUntil: null,
+};
 
 export async function handle(request, options = {}) {
   const opts = { ...DEFAULT_OPTS, ...options, start: Date.now() };
