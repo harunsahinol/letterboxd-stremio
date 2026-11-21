@@ -1,7 +1,7 @@
 {
   "name": "letterboxd-stremio-addon",
-  "version": "1.0.0",
-  "description": "Letterboxd watchlist catalogs for Stremio. Multi-user, free to host.",
+  "version": "1.1.0",
+  "description": "Letterboxd watchlists and lists as Stremio catalogs, with ratings and hide-watched. Multi-user, free to host.",
   "type": "module",
   "license": "MIT",
   "homepage": "https://letterboxd-stremio.netlify.app",
@@ -10,9 +10,10 @@
     "url": "git+https://github.com/harunsahinol/letterboxd-stremio.git"
   },
   "keywords": [
+    "letterboxd",
+    "letterboxd-lists",
     "stremio",
     "stremio-addon",
-    "letterboxd",
     "watchlist"
   ],
   "engines": {

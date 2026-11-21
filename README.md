@@ -1,8 +1,8 @@
 <div align="center">
 
-# Letterboxd Watchlist for Stremio
+# Letterboxd for Stremio
 
-**Your Letterboxd watchlist, right inside Stremio.**<br>
+**Your Letterboxd watchlists and lists, right inside Stremio.**<br>
 Free, open source, no account or API key needed.
 
 [![Install](https://img.shields.io/badge/Install-letterboxd--stremio.netlify.app-00e054?style=for-the-badge)](https://letterboxd-stremio.netlify.app/configure)
@@ -20,18 +20,20 @@ Free, open source, no account or API key needed.
 
 ## Features
 
-- **Any public watchlist.** Yours, your friends', anyone's — just type the username.
-- **Multiple users.** Separate usernames with commas; each gets its own catalog.
+- **Any public watchlist.** Yours, your friends', anyone's — just type the username. Add several, each gets its own catalog.
+- **Letterboxd lists.** Paste any public list link (or a `boxd.it` short link) and it becomes a catalog — IMDb Top 250, a friend's horror list, festival line-ups…
+- **Hide what you've watched.** Enter your own username and films you've already logged disappear from every catalog. Perfect for picking a movie night film from a friend's watchlist.
+- **Letterboxd ratings.** Each film shows its Letterboxd average (e.g. `★ 4.5 on Letterboxd`) in Stremio's Discover preview, and optionally on the film page too.
 - **Works with your other addons.** Films come back with IMDb IDs, so Cinemeta and every stream addon you have work as usual.
-- **Sorting.** Recently added, oldest added, title, release year (newest / oldest), daily shuffle. Change it any time from the dropdown on Stremio's Discover page.
-- **Fast.** Responses are cached on Netlify's CDN; a film's IMDb mapping is cached for 30 days and shared across all users.
-- **Private by design.** No database, no accounts, no tracking. Your settings live only in your own install URL.
+- **Sorting.** Recently added / list order, reverse, title, release year (newest / oldest), daily shuffle. Change it any time from the dropdown on Stremio's Discover page.
+- **Fast & private.** CDN-cached responses, no database, no accounts, no tracking. Your settings live only in your own install URL.
 
 ## Install
 
 1. Open **[letterboxd-stremio.netlify.app](https://letterboxd-stremio.netlify.app/configure)**.
-2. Type your Letterboxd username (your watchlist must be public).
-3. Click **Install in Stremio** (desktop / mobile app) or **Install in Stremio Web**.
+2. Add a username for watchlists and/or paste list links (they must be public).
+3. Optional: enter your own username and tick **Hide films I've already watched**.
+4. Click **Install in Stremio** (desktop / mobile app) or **Install in Stremio Web**.
 
 The catalog shows up on Stremio's **Board** and **Discover** pages.
 
@@ -44,13 +46,17 @@ Browser ──► /configure            pick username(s) + sort order
 https://…/<base64url settings>/manifest.json   ◄── installed in Stremio
                 │
 Stremio ──► /<settings>/catalog/movie/lbxd-watchlist-<user>.json
+           /<settings>/catalog/movie/lbxd-list-<user>~<slug>.json
                 │
                 ├─ letterboxd.com/<user>/watchlist/page/N/   all pages, cached 15 min
-                └─ letterboxd.com/film/<slug>/               IMDb/TMDB ID + poster, cached 30 days
+                ├─ letterboxd.com/<user>/list/<slug>/page/N/ all pages, cached 15 min
+                ├─ letterboxd.com/film/<slug>/               IMDb ID, poster, rating; cached 30 days
+                └─ letterboxd.com/<me>/film/<slug>/          200 = watched, 404 = not (hide-watched)
 ```
 
 - **Stateless.** The server stores nothing about users, so one free instance can serve everyone.
 - **Gradual resolution.** Each request resolves up to N film pages within a time budget (Netlify's free plan has a 10 s limit). Anything not resolved yet is returned as `lbxd:<slug>`; the addon's own `meta` endpoint resolves it on open and passes the IMDb ID to stream addons via `defaultVideoId`. Remaining pages are warmed up in the background.
+- **Hide watched.** Letterboxd blocks bots from paging through a user's full `/films/` grid, so the addon seeds the watched set from `/films/` page 1 and the diary RSS, then checks remaining films one by one (`/<me>/film/<slug>/`). "Watched" is cached for 30 days, "not watched" for 6 hours. Known-watched films are removed before paging so `skip` stays consistent.
 - **Local sorting.** Letterboxd's sorted URLs (`/by/release/` …) are blocked for bots, so the list is fetched once and sorted inside the addon.
 
 | File | Purpose |
@@ -89,7 +95,8 @@ npm test -- your_username
 
 ## Limitations
 
-- The watchlist must be **public**. Letterboxd's official API isn't open to the public, so private lists can't be read.
+- Watchlists and lists must be **public**.
+- Hide-watched checks films gradually; on a big list the first load may still show a few watched films, which disappear on the next refresh. Letterboxd's official API isn't open to the public, so private lists can't be read.
 - Rare films with no IMDb link on Letterboxd show up as `lbxd:` items; they open with Letterboxd info but may have no streams.
 - If Letterboxd changes its HTML, `parseWatchlistPage` / `parseFilmPage` in `src/letterboxd.js` need updating. Issues and PRs are welcome.
 
@@ -104,13 +111,17 @@ Herhangi bir **herkese açık** Letterboxd watchlist'ini Stremio'da katalog olar
 ### Kurulum
 
 1. **[letterboxd-stremio.netlify.app](https://letterboxd-stremio.netlify.app/configure)** adresini aç.
-2. Letterboxd kullanıcı adını yaz (watchlist herkese açık olmalı).
-3. **Stremio'ya yükle** ya da **Stremio Web'e yükle** butonuna bas.
+2. Watchlist için kullanıcı adı yaz ve/veya liste bağlantılarını yapıştır (herkese açık olmalılar).
+3. İstersen kendi kullanıcı adını girip **İzlediğim filmleri gizle**'yi işaretle.
+4. **Stremio'ya yükle** ya da **Stremio Web'e yükle** butonuna bas.
 
 ### Özellikler
 
 - Hesap, veritabanı, API anahtarı yok. Ayarların sadece kendi kurulum adresinde durur.
-- Virgülle ayırarak birden fazla kullanıcı ekleyebilirsin; arkadaşlarının listeleri ayrı katalog olarak gelir.
+- Virgülle ayırarak birden fazla kullanıcı ekleyebilirsin; arkadaşlarının watchlist'leri ayrı katalog olarak gelir.
+- **Letterboxd listeleri:** Herhangi bir herkese açık liste bağlantısını (boxd.it dahil) yapıştır, ayrı bir katalog olsun.
+- **İzlediklerimi gizle:** Kendi kullanıcı adını girersen izlediğin filmler tüm kataloglardan kaybolur. Arkadaşının listesinden film seçerken birebir.
+- **Letterboxd puanı:** Her film Keşfet önizlemesinde Letterboxd ortalamasıyla görünür (ör. `★ 4.5 on Letterboxd`); istersen film sayfasında da.
 - Filmler IMDb ID'leriyle döner, yani Cinemeta ve kurulu tüm stream eklentileri normal çalışır.
 - Sıralama: son eklenen, ilk eklenen, isim, çıkış yılı (yeni/eski), günlük karışık. Stremio'nun Keşfet sayfasındaki menüden de değiştirilebilir.
 

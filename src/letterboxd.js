@@ -65,7 +65,7 @@ export function parseWatchlistPage(html) {
       year: ym ? +ym[2] : null,
     });
   }
-  const pageNums = [...html.matchAll(/\/watchlist\/page\/(\d+)\//g)].map((m) => +m[1]);
+  const pageNums = [...html.matchAll(/\/page\/(\d+)\//g)].map((m) => +m[1]);
   const lastPage = pageNums.length ? Math.max(...pageNums) : 1;
   return { items, lastPage };
 }
@@ -83,30 +83,95 @@ async function mapLimit(list, limit, fn) {
   return out;
 }
 
-// Returns the full watchlist (default Letterboxd order = most recently added first).
-export async function getWatchlist(username) {
-  const user = username.toLowerCase();
-  const key = `wl:${user}`;
+// Fetches every page of a poster grid (watchlist or list) and returns the
+// de-duplicated items in Letterboxd's order. `path` ends with a slash.
+async function getPosterGrid(path, key) {
   const cached = await cache.get(key);
   if (cached) return cached;
 
-  const first = parseWatchlistPage(await get(`/${encodeURIComponent(user)}/watchlist/`));
+  const firstHtml = await get(path);
+  const first = parseWatchlistPage(firstHtml);
   const last = Math.min(first.lastPage, MAX_PAGES);
   const rest = await mapLimit(
     Array.from({ length: Math.max(0, last - 1) }, (_, k) => k + 2),
     6,
-    async (p) => parseWatchlistPage(await get(`/${encodeURIComponent(user)}/watchlist/page/${p}/`)).items
+    async (p) => parseWatchlistPage(await get(`${path}page/${p}/`)).items
   );
 
   const seen = new Set();
-  const all = [];
+  const items = [];
   for (const it of [first.items, ...rest].flat()) {
     if (seen.has(it.slug)) continue;
     seen.add(it.slug);
-    all.push(it);
+    items.push(it);
   }
-  await cache.set(key, all, WATCHLIST_TTL);
-  return all;
+  const og = firstHtml.match(/<meta property="og:title" content="([^"]*)"/);
+  const result = { items, title: og ? decode(og[1]) : null };
+  await cache.set(key, result, WATCHLIST_TTL);
+  return result;
+}
+
+// Full watchlist (default Letterboxd order = most recently added first).
+export async function getWatchlist(username) {
+  const user = username.toLowerCase();
+  return (await getPosterGrid(`/${encodeURIComponent(user)}/watchlist/`, `wl:${user}`)).items;
+}
+
+// A user's list: letterboxd.com/<user>/list/<slug>/ -> { items, title }
+export async function getList(username, slug) {
+  const user = username.toLowerCase();
+  return getPosterGrid(`/${encodeURIComponent(user)}/list/${encodeURIComponent(slug)}/`, `list:${user}/${slug}`);
+}
+
+// ---------- watched films ----------
+// The full /films/ grid is blocked for bots beyond page 1, so we combine:
+//  1. a cheap seed: /<user>/films/ page 1 + the diary RSS (most recent films)
+//  2. per-film checks: /<user>/film/<slug>/ is 200 if watched, 404 if not.
+
+const WATCHED_SEED_TTL = 30 * 60;
+const WATCHED_YES_TTL = 30 * 24 * 60 * 60; // watched never "un-happens"
+const WATCHED_NO_TTL = 6 * 60 * 60;
+
+export async function getWatchedSeed(username) {
+  const user = username.toLowerCase();
+  const key = `wseed:${user}`;
+  const cached = await cache.get(key);
+  if (cached) return new Set(cached);
+  const slugs = new Set();
+  const [films, rss] = await Promise.allSettled([
+    get(`/${encodeURIComponent(user)}/films/`),
+    get(`/${encodeURIComponent(user)}/rss/`),
+  ]);
+  if (films.status === "fulfilled") parseWatchlistPage(films.value).items.forEach((it) => slugs.add(it.slug));
+  if (rss.status === "fulfilled") {
+    for (const m of rss.value.matchAll(/letterboxd\.com\/[^/]+\/film\/([^/<"]+)\//g)) slugs.add(m[1]);
+  }
+  if (films.status === "rejected" && rss.status === "rejected") throw films.reason;
+  await cache.set(key, [...slugs], WATCHED_SEED_TTL);
+  return slugs;
+}
+
+// Cached status only: true / false / null (unknown).
+export async function peekWatched(username, slug) {
+  const v = await cache.get(`w:${username.toLowerCase()}:${slug}`);
+  return v == null ? null : v === 1;
+}
+
+export async function checkWatched(username, slug) {
+  const user = username.toLowerCase();
+  const key = `w:${user}:${slug}`;
+  const cached = await cache.get(key);
+  if (cached != null) return cached === 1;
+  const res = await fetch(`${BASE}/${encodeURIComponent(user)}/film/${encodeURIComponent(slug)}/`, {
+    headers: { "User-Agent": UA, Accept: "text/html" },
+    redirect: "follow",
+  });
+  if (res.status === 200 || res.status === 404) {
+    const watched = res.status === 200;
+    await cache.set(key, watched ? 1 : 0, watched ? WATCHED_YES_TTL : WATCHED_NO_TTL);
+    return watched;
+  }
+  throw new LetterboxdError(`Letterboxd ${res.status} for watched check`, res.status);
 }
 
 export function parseFilmPage(html) {
@@ -126,6 +191,7 @@ export function parseFilmPage(html) {
   const desc = html.match(/<meta name="description" content="([^"]*)"/);
   if (desc) description = decode(desc[1]);
   const bg = html.match(/<meta property="og:image" content="([^"]*)"/);
+  const rating = html.match(/<meta name="twitter:data2" content="([\d.]+) out of 5"/);
   return {
     imdb: imdb ? imdb[1] : null,
     tmdb: tmdbId ? +tmdbId[1] : null,
@@ -133,6 +199,7 @@ export function parseFilmPage(html) {
     poster,
     background: bg ? decode(bg[1]) : null,
     description,
+    rating: rating ? Math.round(parseFloat(rating[1]) * 10) / 10 : null,
   };
 }
 
