@@ -1,6 +1,8 @@
-// Configuration / install page (English + Turkish, picked from the browser language).
+// Configuration / install page in English, Turkish, Spanish, French and Mandarin.
 
-export function configurePage(origin, cfg, sorts) {
+import { LANGS, PAGE, ADDON } from "./i18n.js";
+
+export function configurePage(origin, cfg) {
   const initial = JSON.stringify({
     users: cfg ? cfg.users.join(", ") : "",
     lists: cfg ? cfg.lists.map((l) => `https://letterboxd.com/${l.u}/list/${l.s}/`).join("\n") : "",
@@ -8,8 +10,17 @@ export function configurePage(origin, cfg, sorts) {
     hideWatched: cfg ? cfg.hideWatched : false,
     detailRating: cfg ? cfg.detailRating : false,
     sort: cfg ? cfg.sort : "added",
+    lang: cfg ? cfg.lang : null,
   }).replace(/</g, "\\u003c");
-  const sortOptions = Object.entries(sorts)
+  const i18n = JSON.stringify({
+    langs: LANGS,
+    page: PAGE,
+    sorts: Object.fromEntries(Object.entries(ADDON).map(([l, t]) => [l, t.sorts])),
+  }).replace(/</g, "\\u003c");
+  const langOptions = Object.entries(LANGS)
+    .map(([k, v]) => `<option value="${k}">${v}</option>`)
+    .join("");
+  const sortOptions = Object.entries(ADDON.en.sorts)
     .map(([k, v]) => `<option value="${k}">${v}</option>`)
     .join("");
   return `<!doctype html>
@@ -56,6 +67,9 @@ export function configurePage(origin, cfg, sorts) {
          padding:10px; border-radius:8px; margin-top:12px; border:1px solid var(--line); }
   footer { margin-top:20px; font-size:12px; color:var(--muted); text-align:center; }
   footer a { color:var(--muted); }
+  .langrow { display:flex; align-items:center; gap:10px; margin-top:16px; }
+  .langrow label { margin:0; flex:none; }
+  .langrow select { width:auto; flex:1; padding:8px 10px; font-size:14px; }
 </style>
 </head>
 <body>
@@ -63,10 +77,15 @@ export function configurePage(origin, cfg, sorts) {
   <div class="dots"><i style="background:var(--orange)"></i><i style="background:var(--green)"></i><i style="background:var(--blue)"></i></div>
   <h1 data-t="title">Letterboxd for Stremio</h1>
   <p class="sub" data-t="sub">Show public Letterboxd watchlists and lists as catalogs in Stremio. Free, no account needed.</p>
+  <div class="langrow">
+    <label for="lang" data-t="langLabel">Language</label>
+    <select id="lang">${langOptions}</select>
+  </div>
+  <div class="hint" data-t="langHint">Used on this page and in Stremio (catalog names, sort options, ratings).</div>
 
   <h2 data-t="wlHead">Watchlists</h2>
   <label for="users" data-t="userLabel">Letterboxd username(s)</label>
-  <input id="users" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="e.g. dave">
+  <input id="users" autocomplete="off" autocapitalize="off" spellcheck="false" data-ph="placeholder" placeholder="e.g. dave">
   <div class="hint" data-t="userHint">Separate several with commas to add friends' watchlists too. The watchlist must be public.</div>
   <div class="status" id="userStatus" aria-live="polite"></div>
 
@@ -79,7 +98,7 @@ export function configurePage(origin, cfg, sorts) {
 
   <h2 data-t="meHead">You (optional)</h2>
   <label for="me" data-t="meLabel">Your Letterboxd username</label>
-  <input id="me" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="e.g. dave">
+  <input id="me" autocomplete="off" autocapitalize="off" spellcheck="false" data-ph="placeholder" placeholder="e.g. dave">
   <label class="check off" id="hideWrap">
     <input type="checkbox" id="hideWatched">
     <span><span data-t="hideLabel">Hide films I've already watched</span>
@@ -110,52 +129,35 @@ export function configurePage(origin, cfg, sorts) {
 <script>
 const ORIGIN = ${JSON.stringify(origin)};
 const INITIAL = ${initial};
-const T = {
-  tr: {
-    title: "Stremio için Letterboxd",
-    sub: "Herkese açık Letterboxd watchlist'lerini ve listelerini Stremio'da katalog olarak göster. Ücretsiz, hesap gerekmez.",
-    wlHead: "Watchlist'ler",
-    userLabel: "Letterboxd kullanıcı ad(lar)ı",
-    userHint: "Arkadaşlarının watchlist'lerini de eklemek için virgülle ayır. Watchlist herkese açık olmalı.",
-    listHead: "Listeler",
-    listLabel: "Letterboxd liste bağlantıları (her satıra bir tane)",
-    listHint: "Herkese açık her liste olur, boxd.it kısa bağlantıları da. Her liste ayrı bir katalog olur.",
-    meHead: "Sen (isteğe bağlı)",
-    meLabel: "Kendi Letterboxd kullanıcı adın",
-    hideLabel: "İzlediğim filmleri gizle",
-    hideHint: "Arkadaşlarının watchlist'leri ve büyük listeler için ideal. Yeni izlediğin filmlerin kaybolması birkaç dakika sürebilir.",
-    optHead: "Seçenekler",
-    sortLabel: "Varsayılan sıralama",
-    sortHint: "Sıralamayı Stremio'nun Keşfet sayfasındaki menüden de değiştirebilirsin.",
-    drLabel: "Letterboxd puanını film sayfasında da göster",
-    drHint: "Puan Keşfet önizlemesinde her zaman görünür. Bunu açarsan film detay sayfasına da eklenir; filmler kütüphanende Letterboxd ID'siyle tutulur.",
-    install: "Stremio'ya yükle", web: "Stremio Web'e yükle", copy: "Manifest adresini kopyala",
-    copied: "Kopyalandı!", checking: "Kontrol ediliyor…", found: (u, n) => u + ": " + n + " film bulundu",
-    notfound: (u) => u + ": kullanıcı bulunamadı ya da watchlist gizli", upstream: (u) => u + ": Letterboxd'a şu an ulaşılamadı (yine de yükleyebilirsin)",
-    invalid: (u) => u + ": geçersiz kullanıcı adı",
-    listFound: (t, n) => t + ": " + n + " film", listNotFound: (l) => l + ": liste bulunamadı ya da gizli",
-    listInvalid: (l) => l + ": liste bağlantısı anlaşılamadı", listUpstream: (l) => l + ": Letterboxd'a ulaşılamadı (yine de eklenecek)",
-    footer: "Letterboxd veya Stremio ile bağlantılı değildir.",
-    source: "GitHub'da açık kaynak"
-  },
-  en: {
-    copied: "Copied!", checking: "Checking…", found: (u, n) => u + ": " + n + " films found",
-    notfound: (u) => u + ": user not found or watchlist is private", upstream: (u) => u + ": couldn't reach Letterboxd right now (you can still install)",
-    invalid: (u) => u + ": invalid username",
-    listFound: (t, n) => t + ": " + n + " films", listNotFound: (l) => l + ": list not found or private",
-    listInvalid: (l) => l + ": couldn't understand this list link", listUpstream: (l) => l + ": couldn't reach Letterboxd (it will still be added)"
+const I18N = ${i18n};
+const fmt = (str, v) => str.replace(/\\{(\\w+)\\}/g, (_, k) => (k in v ? v[k] : "{" + k + "}"));
+function detectLang() {
+  for (const l of navigator.languages || [navigator.language || "en"]) {
+    const code = String(l).toLowerCase().slice(0, 2);
+    if (I18N.langs[code]) return code;
   }
-};
-const lang = (navigator.language || "en").toLowerCase().startsWith("tr") ? "tr" : "en";
-const L = Object.assign({}, T.en, lang === "tr" ? T.tr : {});
-if (lang === "tr") {
-  document.documentElement.lang = "tr";
-  document.querySelectorAll("[data-t]").forEach(el => { const v = L[el.dataset.t]; if (typeof v === "string") el.textContent = v; });
+  return "en";
+}
+let lang = INITIAL.lang || detectLang();
+let L = I18N.page[lang];
+const say = (key, vars) => fmt(L[key] || I18N.page.en[key], vars || {});
+function applyLang() {
+  L = I18N.page[lang];
+  document.documentElement.lang = lang === "zh" ? "zh-CN" : lang;
+  document.title = L.title;
+  document.querySelectorAll("[data-t]").forEach(el => { if (L[el.dataset.t]) el.textContent = L[el.dataset.t]; });
+  document.querySelectorAll("[data-ph]").forEach(el => { el.placeholder = L[el.dataset.ph]; });
+  const sortSel = document.getElementById("sort"), cur = sortSel.value;
+  sortSel.innerHTML = "";
+  Object.entries(I18N.sorts[lang]).forEach(([k, v]) => sortSel.add(new Option(v, k)));
+  sortSel.value = cur;
 }
 
 const $ = (id) => document.getElementById(id);
 const usersEl = $("users"), listsEl = $("lists"), meEl = $("me"), hideEl = $("hideWatched"),
-      drEl = $("detailRating"), sortEl = $("sort");
+      drEl = $("detailRating"), sortEl = $("sort"), langEl = $("lang");
+langEl.value = lang;
+applyLang();
 usersEl.value = INITIAL.users; listsEl.value = INITIAL.lists; meEl.value = INITIAL.me;
 hideEl.checked = INITIAL.hideWatched; drEl.checked = INITIAL.detailRating; sortEl.value = INITIAL.sort;
 
@@ -177,7 +179,7 @@ function config() {
   const u = users().filter(x => USER_RE.test(x));
   const lists = listLines().map(l => listInfo.get(l)).filter(Boolean);
   if (!u.length && !lists.length) return null;
-  const cfg = { users: u, lists, sort: sortEl.value };
+  const cfg = { users: u, lists, sort: sortEl.value, lang };
   if (USER_RE.test(me())) { cfg.me = me(); if (hideEl.checked) cfg.hideWatched = true; }
   if (drEl.checked) cfg.detailRating = true;
   return cfg;
@@ -204,13 +206,13 @@ function checkUsers() {
   const list = users();
   if (!list.length) return show($("userStatus"), []);
   userTimer = setTimeout(async () => {
-    show($("userStatus"), [["", L.checking]]);
+    show($("userStatus"), [["", say("checking")]]);
     show($("userStatus"), await Promise.all(list.map(async u => {
-      if (!USER_RE.test(u)) return ["err", L.invalid(u)];
+      if (!USER_RE.test(u)) return ["err", say("invalid", { u })];
       try {
         const r = await (await fetch(ORIGIN + "/api/check?u=" + encodeURIComponent(u))).json();
-        return r.ok ? ["ok", L.found(u, r.count)] : ["err", (L[r.error] || L.upstream)(u)];
-      } catch { return ["err", L.upstream(u)]; }
+        return r.ok ? ["ok", say("found", { u, n: r.count })] : ["err", say(r.error === "notfound" || r.error === "invalid" ? r.error : "upstream", { u })];
+      } catch { return ["err", say("upstream", { u })]; }
     })));
   }, 600);
 }
@@ -221,19 +223,19 @@ function checkLists() {
   const lines = listLines();
   if (!lines.length) { show($("listStatus"), []); return update(); }
   listTimer = setTimeout(async () => {
-    show($("listStatus"), [["", L.checking]]);
+    show($("listStatus"), [["", say("checking")]]);
     const out = await Promise.all(lines.map(async line => {
       try {
         const r = await (await fetch(ORIGIN + "/api/list?url=" + encodeURIComponent(line))).json();
-        if (r.ok) { listInfo.set(line, { u: r.u, s: r.s, n: r.title }); return ["ok", L.listFound(r.title, r.count)]; }
+        if (r.ok) { listInfo.set(line, { u: r.u, s: r.s, n: r.title }); return ["ok", say("listFound", { t: r.title, n: r.count })]; }
         listInfo.delete(line);
         if (r.error === "upstream") {
           const m = line.replace(/^https?:\\/\\/(www\\.)?letterboxd\\.com\\//, "").match(/^([a-z0-9_]+)\\/(?:list\\/)?([a-z0-9-]+)/i);
           if (m) listInfo.set(line, { u: m[1].toLowerCase(), s: m[2].toLowerCase(), n: m[2] });
-          return ["err", L.listUpstream(line)];
+          return ["err", say("listUpstream", { l: line })];
         }
-        return ["err", (r.error === "notfound" ? L.listNotFound : L.listInvalid)(line)];
-      } catch { return ["err", L.listUpstream(line)]; }
+        return ["err", say(r.error === "notfound" ? "listNotFound" : "listInvalid", { l: line })];
+      } catch { return ["err", say("listUpstream", { l: line })]; }
     }));
     show($("listStatus"), out);
     update();
@@ -242,11 +244,12 @@ function checkLists() {
 
 usersEl.addEventListener("input", () => { update(); checkUsers(); });
 listsEl.addEventListener("input", () => { update(); checkLists(); });
+langEl.addEventListener("change", () => { lang = langEl.value; applyLang(); update(); checkUsers(); checkLists(); });
 [meEl, hideEl, drEl, sortEl].forEach(el => el.addEventListener(el.tagName === "INPUT" && el.type !== "checkbox" ? "input" : "change", update));
 $("copy").addEventListener("click", async () => {
   const cfg = config(); if (!cfg) return;
   try { await navigator.clipboard.writeText($("url").textContent); } catch {}
-  const b = $("copy"), old = b.textContent; b.textContent = L.copied; setTimeout(() => b.textContent = old, 1500);
+  const b = $("copy"), old = b.textContent; b.textContent = say("copied"); setTimeout(() => b.textContent = old, 1500);
 });
 update(); checkUsers(); checkLists();
 </script>

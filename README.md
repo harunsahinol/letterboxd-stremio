@@ -26,6 +26,7 @@ Free, open source, no account or API key needed.
 - **Letterboxd ratings.** Each film shows its Letterboxd average (e.g. `★ 4.5 on Letterboxd`) in Stremio's Discover preview, and optionally on the film page too.
 - **Works with your other addons.** Films come back with IMDb IDs, so Cinemeta and every stream addon you have work as usual.
 - **Sorting.** Recently added / list order, reverse, title, release year (newest / oldest), daily shuffle. Change it any time from the dropdown on Stremio's Discover page.
+- **5 languages.** English, Türkçe, Español, Français and 中文 (Mandarin). The configure page picks your browser language, and catalog names, sort options and ratings in Stremio follow your choice. Film titles and descriptions come from Letterboxd / Cinemeta.
 - **Fast & private.** CDN-cached responses, no database, no accounts, no tracking. Your settings live only in your own install URL.
 
 ## Install
@@ -64,7 +65,8 @@ Stremio ──► /<settings>/catalog/movie/lbxd-watchlist-<user>.json
 | [`src/addon.js`](src/addon.js) | Platform-independent core: manifest, catalog, meta, routing |
 | [`src/letterboxd.js`](src/letterboxd.js) | Watchlist and film page parsing |
 | [`src/cache.js`](src/cache.js) | In-memory LRU (+ Cache API on Workers) |
-| [`src/configure.js`](src/configure.js) | Configure page (English / Turkish, auto-detected) |
+| [`src/configure.js`](src/configure.js) | Configure page with language picker |
+| [`src/i18n.js`](src/i18n.js) | Translations (en, tr, es, fr, zh) — add a language here |
 | [`netlify/functions/addon.js`](netlify/functions/addon.js) | Netlify adapter |
 | [`src/server.js`](src/server.js) | Plain Node server (local, Render, Koyeb, Docker…) |
 | [`src/worker.js`](src/worker.js) | Cloudflare Workers adapter (experimental) |
@@ -98,6 +100,7 @@ npm test -- your_username
 - Watchlists and lists must be **public**.
 - Hide-watched checks films gradually; on a big list the first load may still show a few watched films, which disappear on the next refresh. Letterboxd's official API isn't open to the public, so private lists can't be read.
 - Rare films with no IMDb link on Letterboxd show up as `lbxd:` items; they open with Letterboxd info but may have no streams.
+- Film titles and plot summaries are not translated (they come from Letterboxd / Cinemeta in English). Translation fixes and new languages are welcome in [`src/i18n.js`](src/i18n.js).
 - If Letterboxd changes its HTML, `parseWatchlistPage` / `parseFilmPage` in `src/letterboxd.js` need updating. Issues and PRs are welcome.
 
 ---
@@ -121,6 +124,7 @@ Herhangi bir **herkese açık** Letterboxd watchlist'ini Stremio'da katalog olar
 - Virgülle ayırarak birden fazla kullanıcı ekleyebilirsin; arkadaşlarının watchlist'leri ayrı katalog olarak gelir.
 - **Letterboxd listeleri:** Herhangi bir herkese açık liste bağlantısını (boxd.it dahil) yapıştır, ayrı bir katalog olsun.
 - **İzlediklerimi gizle:** Kendi kullanıcı adını girersen izlediğin filmler tüm kataloglardan kaybolur. Arkadaşının listesinden film seçerken birebir.
+- **5 dil:** İngilizce, Türkçe, İspanyolca, Fransızca ve Çince (Mandarin). Kurulum sayfası tarayıcı dilini seçer; Stremio'daki katalog adları, sıralama seçenekleri ve puanlar da seçtiğin dilde gelir. Film adları ve açıklamaları Letterboxd/Cinemeta'dan gelir.
 - **Letterboxd puanı:** Her film Keşfet önizlemesinde Letterboxd ortalamasıyla görünür (ör. `★ 4.5 on Letterboxd`); istersen film sayfasında da.
 - Filmler IMDb ID'leriyle döner, yani Cinemeta ve kurulu tüm stream eklentileri normal çalışır.
 - Sıralama: son eklenen, ilk eklenen, isim, çıkış yılı (yeni/eski), günlük karışık. Stremio'nun Keşfet sayfasındaki menüden de değiştirilebilir.

@@ -13,24 +13,38 @@ import {
   LetterboxdError,
 } from "./letterboxd.js";
 import { configurePage } from "./configure.js";
+import { ADDON, LANGS, DEFAULT_LANG, addonStrings, fmt, formatRating } from "./i18n.js";
 
-const VERSION = "1.1.0";
+const VERSION = "1.2.0";
 const PAGE_SIZE = 100;
 
-export const SORTS = {
-  added: "Recently added",
-  "added-old": "Oldest added",
-  name: "Title (A-Z)",
-  "release-new": "Release (newest)",
-  "release-old": "Release (oldest)",
-  shuffle: "Shuffle (daily)",
+// Sort keys; labels come from i18n.js in the user's language.
+export const SORTS = ADDON.en.sorts;
+
+const sortLabels = (lang, isList) => {
+  const t = addonStrings(lang);
+  return isList ? { ...t.sorts, ...t.listSorts } : t.sorts;
 };
-// Same keys, wording that fits a list.
-const LIST_SORTS = { ...SORTS, added: "List order", "added-old": "Reverse list order" };
+
+// Stremio sends back the label picked in the dropdown; match it in any language.
+function sortKeyFromLabel(label, lang, isList) {
+  if (!label) return null;
+  const own = sortLabels(lang, isList);
+  const hit = Object.keys(own).find((k) => own[k] === label);
+  if (hit) return hit;
+  for (const l of Object.keys(LANGS)) {
+    for (const isL of [false, true]) {
+      const labels = sortLabels(l, isL);
+      const k = Object.keys(labels).find((key) => labels[key] === label);
+      if (k) return k;
+    }
+  }
+  return null;
+}
 
 // ---------- config (base64url JSON in the URL path) ----------
 // { users: ["dave"], lists: [{u:"dave", s:"imdb-top-250", n:"IMDb Top 250"}],
-//   me: "dave", hideWatched: true, detailRating: false, sort: "added" }
+//   me: "dave", hideWatched: true, detailRating: false, sort: "added", lang: "en" }
 
 const USERNAME_RE = /^[a-z0-9_]{1,40}$/i;
 const SLUG_RE = /^[a-z0-9][a-z0-9-]{0,120}$/i;
@@ -71,6 +85,7 @@ export function decodeConfig(str) {
       hideWatched: !!(me && cfg.hideWatched),
       detailRating: !!cfg.detailRating,
       sort: SORTS[cfg.sort] ? cfg.sort : "added",
+      lang: LANGS[cfg.lang] ? cfg.lang : DEFAULT_LANG,
     };
   } catch {
     return null;
@@ -86,7 +101,7 @@ export function parseListInput(input) {
 
 // ---------- manifest ----------
 
-function catalogDef(id, name, sorts) {
+function catalogDef(id, name, labels) {
   return {
     type: "movie",
     id,
@@ -94,7 +109,7 @@ function catalogDef(id, name, sorts) {
     extra: [
       { name: "skip", isRequired: false },
       // Stremio shows "genre" as a dropdown in Discover; we use it for sorting.
-      { name: "genre", isRequired: false, options: Object.values(sorts) },
+      { name: "genre", isRequired: false, options: Object.values(labels) },
     ],
   };
 }
@@ -113,16 +128,18 @@ function manifest(cfg) {
     behaviorHints: { configurable: true, configurationRequired: !cfg },
   };
   if (!cfg) return base;
+  const t = addonStrings(cfg.lang);
+  const multi = cfg.users.length > 1 || cfg.lists.length > 0;
   base.catalogs = [
     ...cfg.users.map((u) =>
-      catalogDef(`lbxd-watchlist-${u}`, cfg.users.length > 1 || cfg.lists.length ? `${u}'s Watchlist` : "Letterboxd Watchlist", SORTS)
+      catalogDef(`lbxd-watchlist-${u}`, multi ? fmt(t.watchlistOf, { u }) : t.watchlist, sortLabels(cfg.lang, false))
     ),
-    ...cfg.lists.map((l) => catalogDef(`lbxd-list-${l.u}~${l.s}`, l.n, LIST_SORTS)),
+    ...cfg.lists.map((l) => catalogDef(`lbxd-list-${l.u}~${l.s}`, l.n, sortLabels(cfg.lang, true))),
   ];
-  const parts = [];
-  if (cfg.users.length) parts.push(`watchlist of ${cfg.users.join(", ")}`);
-  if (cfg.lists.length) parts.push(`${cfg.lists.length} list${cfg.lists.length > 1 ? "s" : ""}`);
-  base.description = `Letterboxd: ${parts.join(" + ")}${cfg.hideWatched ? ` (hiding films ${cfg.me} has watched)` : ""}.`;
+  base.description =
+    "Letterboxd · " +
+    base.catalogs.map((c) => c.name).join(" · ") +
+    (cfg.hideWatched ? ` (${fmt(t.hiding, { u: cfg.me })})` : "");
   return base;
 }
 
@@ -162,11 +179,11 @@ function sortItems(items, sort, seedStr) {
 
 // ---------- catalog ----------
 
-const stars = (r) => `★ ${r.toFixed(1)}`;
+const ratingText = (r, lang) => fmt(addonStrings(lang).rating, { r: formatRating(r, lang) });
 
 function toMeta(item, film, cfg) {
   const releaseInfo = item.year ? String(item.year) : undefined;
-  const description = film && film.rating ? `${stars(film.rating)} on Letterboxd` : undefined;
+  const description = film && film.rating ? ratingText(film.rating, cfg.lang) : undefined;
   if (film && film.imdb && !cfg.detailRating) {
     return {
       id: film.imdb,
@@ -202,10 +219,10 @@ function makeBudget(opts, max) {
 async function loadSource(cfg, id) {
   let m;
   if ((m = id.match(/^lbxd-watchlist-(.+)$/)) && cfg.users.includes(m[1])) {
-    return { items: await getWatchlist(m[1]), sorts: SORTS, seed: m[1] };
+    return { items: await getWatchlist(m[1]), isList: false, seed: m[1] };
   }
   if ((m = id.match(/^lbxd-list-([^~]+)~(.+)$/)) && cfg.lists.some((l) => l.u === m[1] && l.s === m[2])) {
-    return { items: (await getList(m[1], m[2])).items, sorts: LIST_SORTS, seed: id };
+    return { items: (await getList(m[1], m[2])).items, isList: true, seed: id };
   }
   return null;
 }
@@ -214,7 +231,7 @@ async function catalog(cfg, id, extra, opts) {
   const src = await loadSource(cfg, id);
   if (!src) return { metas: [], complete: true };
 
-  const sortKey = Object.keys(src.sorts).find((k) => src.sorts[k] === extra.genre) || cfg.sort;
+  const sortKey = sortKeyFromLabel(extra.genre, cfg.lang, src.isList) || cfg.sort;
   const skip = Math.max(0, parseInt(extra.skip || "0", 10) || 0);
   let all = sortItems(src.items, sortKey, src.seed);
   const spendFilm = makeBudget(opts, opts.maxResolvePerRequest);
@@ -282,19 +299,23 @@ async function warm(items, cfg, max) {
 
 // ---------- meta (only for lbxd: ids) ----------
 
-function addLetterboxdInfo(m, slug, film) {
+function addLetterboxdInfo(m, slug, film, lang) {
   const url = `https://letterboxd.com/film/${slug}/`;
   if (film.rating) {
-    m.description = `${stars(film.rating)} on Letterboxd${m.description ? `\n\n${m.description}` : ""}`;
+    m.description = `${ratingText(film.rating, lang)}${m.description ? `\n\n${m.description}` : ""}`;
   }
   m.links = [
     ...(m.links || []),
-    { name: film.rating ? `${stars(film.rating)} Letterboxd` : "Letterboxd", category: "Letterboxd", url },
+    {
+      name: film.rating ? `★ ${formatRating(film.rating, lang)} Letterboxd` : "Letterboxd",
+      category: "Letterboxd",
+      url,
+    },
   ];
   return m;
 }
 
-async function meta(type, id) {
+async function meta(type, id, lang) {
   const slug = id.replace(/^lbxd:/, "");
   const film = await getFilm(slug);
   if (film.imdb) {
@@ -306,7 +327,7 @@ async function meta(type, id) {
           m.id = id;
           m.behaviorHints = { ...(m.behaviorHints || {}) };
           if (film.type === "movie") m.behaviorHints.defaultVideoId = film.imdb;
-          return { meta: addLetterboxdInfo(m, slug, film) };
+          return { meta: addLetterboxdInfo(m, slug, film, lang) };
         }
       }
     } catch {}
@@ -323,7 +344,8 @@ async function meta(type, id) {
         behaviorHints: film.imdb && film.type === "movie" ? { defaultVideoId: film.imdb } : {},
       },
       slug,
-      film
+      film,
+      lang
     ),
   };
 }
@@ -388,8 +410,8 @@ export async function handle(request, options = {}) {
     let m;
     if (path === "/configure" || (m = path.match(/^\/([^/]+)\/configure$/))) {
       const cfg = m ? decodeConfig(m[1]) : null;
-      return new Response(configurePage(url.origin, cfg, SORTS), {
-        headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=3600" },
+      return new Response(configurePage(url.origin, cfg), {
+        headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=300" },
       });
     }
 
@@ -433,7 +455,7 @@ export async function handle(request, options = {}) {
     if ((m = rest.match(/^\/meta\/([^/]+)\/([^/]+)\.json$/))) {
       const id = decodeURIComponent(m[2]);
       if (!id.startsWith("lbxd:")) return json({ meta: null }, 0, 404);
-      return json(await meta(m[1], id), 86400);
+      return json(await meta(m[1], id, cfg.lang), 86400);
     }
 
     return json({ error: "not found" }, 0, 404);
