@@ -67,7 +67,7 @@ export function configurePage(origin, cfg) {
   .step[open] .chev { transform:rotate(180deg); }
 
   .field { margin-top:16px; }
-  .field > label { display:block; font-size:13px; font-weight:600; margin-bottom:6px; }
+  .field > label:not(.check) { display:block; font-size:13px; font-weight:600; margin-bottom:6px; }
   input:not([type=checkbox]), select, textarea { width:100%; padding:10px 12px; border-radius:8px; border:1px solid var(--line);
          background:var(--field); color:var(--text); font:inherit; font-size:15px; }
   .field select { appearance:auto; }
