@@ -16,7 +16,7 @@ import {
 import { configurePage } from "./configure.js";
 import { ADDON, LANGS, DEFAULT_LANG, addonStrings, fmt, formatRating } from "./i18n.js";
 
-const VERSION = "1.3.0";
+const VERSION = "1.4.0";
 const PAGE_SIZE = 100;
 
 // Sort keys; labels come from i18n.js in the user's language.
@@ -127,13 +127,17 @@ function catalogDef(id, name, options) {
   };
 }
 
+const ASSETS = "https://raw.githubusercontent.com/harunsahinol/letterboxd-stremio/main/docs/";
+
 function manifest(cfg) {
   const base = {
     id: "community.letterboxd.watchlist",
     version: VERSION,
     name: "Letterboxd",
     description:
-      "Letterboxd watchlists and lists as Stremio catalogs, with Letterboxd ratings and an option to hide films you've already watched. Free & open source.",
+      "Your Letterboxd watchlists, lists and diaries as Stremio catalogs, with genre filter, Letterboxd ratings and an option to hide films you've already watched. No login needed. Free & open source; not affiliated with Letterboxd.",
+    logo: ASSETS + "logo.png",
+    background: ASSETS + "background.png",
     resources: ["catalog", { name: "meta", types: ["movie", "series"], idPrefixes: ["lbxd:"] }],
     types: ["movie", "series"],
     idPrefixes: ["lbxd:"],

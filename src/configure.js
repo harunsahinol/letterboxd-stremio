@@ -31,6 +31,10 @@ export function configurePage(origin, cfg) {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Letterboxd for Stremio</title>
+<link rel="icon" href="https://raw.githubusercontent.com/harunsahinol/letterboxd-stremio/main/docs/logo.png">
+<meta property="og:title" content="Letterboxd for Stremio">
+<meta property="og:description" content="Your Letterboxd watchlists, lists and diaries as Stremio catalogs. Free, no login.">
+<meta property="og:image" content="https://raw.githubusercontent.com/harunsahinol/letterboxd-stremio/main/docs/background.png">
 <style>
   :root { --bg:#14181c; --card:#1c2228; --card2:#20272e; --line:#2c3440; --text:#e1e8f0; --muted:#8a9bab;
           --green:#00e054; --orange:#ff8000; --blue:#40bcf4; --red:#ff6b6b; --field:#0f1317; }
@@ -43,8 +47,7 @@ export function configurePage(origin, cfg) {
   /* header */
   .top { display:flex; align-items:center; justify-content:space-between; gap:12px; }
   .brand { display:flex; align-items:center; gap:10px; min-width:0; }
-  .dots { display:flex; gap:4px; flex:none; }
-  .dots i { width:11px; height:11px; border-radius:50%; display:block; }
+  .logo { width:26px; height:26px; flex:none; display:block; }
   h1 { font-size:20px; margin:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .lang { position:relative; flex:none; }
   .lang select { appearance:none; -webkit-appearance:none; background:var(--card); color:var(--text);
@@ -120,7 +123,7 @@ export function configurePage(origin, cfg) {
 <main>
   <header class="top">
     <div class="brand">
-      <div class="dots" aria-hidden="true"><i style="background:var(--orange)"></i><i style="background:var(--green)"></i><i style="background:var(--blue)"></i></div>
+      <svg class="logo" aria-hidden="true" viewBox="0 0 256 256"><rect width="256" height="256" rx="56" fill="#0d1013"/><path d="M78 46h100a10 10 0 0 1 10 10v158l-60-38-60 38V56a10 10 0 0 1 10-10z" fill="#00e054"/><path d="M110 92v62l50-31z" fill="#0d1013"/></svg>
       <h1 data-t="title">Letterboxd for Stremio</h1>
     </div>
     <div class="lang"><select id="lang" aria-label="Language">${langOptions}</select></div>
