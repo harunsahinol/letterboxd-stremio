@@ -9,6 +9,7 @@ export function configurePage(origin, cfg) {
     lists: cfg ? cfg.lists.map((l) => `https://letterboxd.com/${l.u}/list/${l.s}/`).join("\n") : "",
     me: cfg && cfg.me ? cfg.me : "",
     hideWatched: cfg ? cfg.hideWatched : false,
+    diary: cfg ? cfg.diary : false,
     detailRating: cfg ? cfg.detailRating : false,
     sort: cfg ? cfg.sort : "added",
     lang: cfg ? cfg.lang : null,
@@ -17,7 +18,7 @@ export function configurePage(origin, cfg) {
     langs: LANGS,
     page: PAGE,
     addon: Object.fromEntries(
-      Object.entries(ADDON).map(([l, t]) => [l, { sorts: t.sorts, watchlist: t.watchlist, watchlistOf: t.watchlistOf }])
+      Object.entries(ADDON).map(([l, t]) => [l, { sorts: t.sorts, watchlist: t.watchlist, watchlistOf: t.watchlistOf, diary: t.diary, diaryOf: t.diaryOf }])
     ),
   }).replace(/</g, "\\u003c");
   const langOptions = Object.entries(LANGS)
@@ -81,6 +82,7 @@ export function configurePage(origin, cfg) {
   .check input { width:18px; height:18px; margin:1px 0 0; accent-color:var(--green); flex:none; }
   .check .hint { font-weight:400; margin-top:2px; }
   .check.off { display:none; }
+  .field .check { margin-top:12px; }
 
   /* summary + install */
   .summary { margin-top:12px; }
@@ -132,6 +134,11 @@ export function configurePage(origin, cfg) {
       <input id="users" autocomplete="off" autocapitalize="off" spellcheck="false" data-ph="placeholder" placeholder="dave, friend123">
       <div class="hint" data-t="userHint"></div>
       <div class="status" id="userStatus" aria-live="polite"></div>
+      <label class="check off" id="diaryWrap">
+        <input type="checkbox" id="diary">
+        <span><span data-t="diaryLabel">Also add their diaries</span>
+          <span class="hint" style="display:block" data-t="diaryHint"></span></span>
+      </label>
     </div>
     <div class="field">
       <label for="lists" data-t="listHead">Lists</label>
@@ -202,7 +209,7 @@ const say = (key, vars) => fmt(L[key] || I18N.page.en[key], vars || {});
 
 const $ = (id) => document.getElementById(id);
 const usersEl = $("users"), listsEl = $("lists"), meEl = $("me"), hideEl = $("hideWatched"),
-      drEl = $("detailRating"), sortEl = $("sort"), langEl = $("lang");
+      drEl = $("detailRating"), sortEl = $("sort"), langEl = $("lang"), diaryEl = $("diary");
 
 function applyLang() {
   L = I18N.page[lang];
@@ -220,7 +227,7 @@ function applyLang() {
 langEl.value = lang;
 applyLang();
 usersEl.value = INITIAL.users; listsEl.value = INITIAL.lists; meEl.value = INITIAL.me;
-hideEl.checked = INITIAL.hideWatched; drEl.checked = INITIAL.detailRating; sortEl.value = INITIAL.sort;
+hideEl.checked = INITIAL.hideWatched; diaryEl.checked = INITIAL.diary; drEl.checked = INITIAL.detailRating; sortEl.value = INITIAL.sort;
 if (INITIAL.me || INITIAL.detailRating || INITIAL.sort !== "added") $("personal").open = true;
 
 const USER_RE = /^[a-z0-9_]{1,40}$/;
@@ -245,6 +252,7 @@ function config() {
   const u = goodUsers(), lists = goodLists();
   if (!u.length && !lists.length) return null;
   const cfg = { users: u, lists: lists.map(({ u, s, n }) => ({ u, s, n })), sort: sortEl.value, lang };
+  if (u.length && diaryEl.checked) cfg.diary = true;
   if (USER_RE.test(me())) { cfg.me = me(); if (hideEl.checked) cfg.hideWatched = true; }
   if (drEl.checked) cfg.detailRating = true;
   return cfg;
@@ -257,7 +265,8 @@ function renderSummary(cfg) {
   if (!cfg) return box.appendChild(el("div", "empty", say("empty")));
   box.appendChild(el("div", "label", say("youGet")));
   const t = I18N.addon[lang];
-  const multi = cfg.users.length > 1 || cfg.lists.length > 0;
+  const multi = cfg.users.length > 1 || cfg.lists.length > 0 || !!cfg.diary;
+  const solo = cfg.users.length === 1 && !cfg.lists.length;
   const row = (icon, name, count) => {
     const r = el("div", "cat");
     r.append(el("i", null, icon), el("b", null, name));
@@ -265,12 +274,14 @@ function renderSummary(cfg) {
     box.appendChild(r);
   };
   cfg.users.forEach(u => row("👤", multi ? fmt(t.watchlistOf, { u }) : t.watchlist, userInfo.get(u) && userInfo.get(u).count));
+  if (cfg.diary) cfg.users.forEach(u => row("📖", solo ? t.diary : fmt(t.diaryOf, { u }), null));
   goodLists().forEach(l => row("📋", l.n, l.count));
   if (cfg.hideWatched) box.appendChild(el("div", "note", "👁 " + say("willHide", { u: cfg.me })));
 }
 
 function update() {
   $("hideWrap").classList.toggle("off", !USER_RE.test(me()));
+  $("diaryWrap").classList.toggle("off", !users().length);
   const cfg = config();
   renderSummary(cfg);
   const url = cfg && ORIGIN + "/" + b64url(JSON.stringify(cfg)) + "/manifest.json";
@@ -336,7 +347,7 @@ function checkLists() {
 usersEl.addEventListener("input", () => { update(); checkUsers(); });
 listsEl.addEventListener("input", () => { update(); checkLists(); });
 meEl.addEventListener("input", update);
-[hideEl, drEl, sortEl].forEach(e => e.addEventListener("change", update));
+[hideEl, drEl, sortEl, diaryEl].forEach(e => e.addEventListener("change", update));
 langEl.addEventListener("change", () => { lang = langEl.value; applyLang(); update(); checkUsers(); checkLists(); });
 $("copy").addEventListener("click", async () => {
   if (!config()) return;

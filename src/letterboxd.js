@@ -123,6 +123,41 @@ export async function getList(username, slug) {
   return getPosterGrid(`/${encodeURIComponent(user)}/list/${encodeURIComponent(slug)}/`, `list:${user}/${slug}`);
 }
 
+// ---------- diary (RSS: the user's ~50 most recent diary entries) ----------
+
+export function parseDiaryRss(xml) {
+  const out = [];
+  const seen = new Set();
+  for (const [, item] of xml.matchAll(/<item>([\s\S]*?)<\/item>/g)) {
+    const title = item.match(/<letterboxd:filmTitle>([\s\S]*?)<\/letterboxd:filmTitle>/);
+    const link = item.match(/<link>https?:\/\/letterboxd\.com\/[^/]+\/film\/([^/<]+)\//);
+    if (!title || !link || seen.has(link[1])) continue;
+    seen.add(link[1]);
+    const year = item.match(/<letterboxd:filmYear>(\d{4})</);
+    const rating = item.match(/<letterboxd:memberRating>([\d.]+)</);
+    const date = item.match(/<letterboxd:watchedDate>([\d-]+)</);
+    out.push({
+      slug: link[1],
+      name: decode(title[1].replace(/<!\[CDATA\[|\]\]>/g, "").trim()),
+      year: year ? +year[1] : null,
+      userRating: rating ? parseFloat(rating[1]) : null,
+      watched: date ? date[1] : null,
+      liked: /<letterboxd:memberLike>Yes</.test(item),
+    });
+  }
+  return out;
+}
+
+export async function getDiary(username) {
+  const user = username.toLowerCase();
+  const key = `diary:${user}`;
+  const cached = await cache.get(key);
+  if (cached) return cached;
+  const items = parseDiaryRss(await get(`/${encodeURIComponent(user)}/rss/`));
+  await cache.set(key, items, WATCHLIST_TTL);
+  return items;
+}
+
 // ---------- watched films ----------
 // The full /films/ grid is blocked for bots beyond page 1, so we combine:
 //  1. a cheap seed: /<user>/films/ page 1 + the diary RSS (most recent films)
@@ -138,14 +173,9 @@ export async function getWatchedSeed(username) {
   const cached = await cache.get(key);
   if (cached) return new Set(cached);
   const slugs = new Set();
-  const [films, rss] = await Promise.allSettled([
-    get(`/${encodeURIComponent(user)}/films/`),
-    get(`/${encodeURIComponent(user)}/rss/`),
-  ]);
+  const [films, rss] = await Promise.allSettled([get(`/${encodeURIComponent(user)}/films/`), getDiary(user)]);
   if (films.status === "fulfilled") parseWatchlistPage(films.value).items.forEach((it) => slugs.add(it.slug));
-  if (rss.status === "fulfilled") {
-    for (const m of rss.value.matchAll(/letterboxd\.com\/[^/]+\/film\/([^/<"]+)\//g)) slugs.add(m[1]);
-  }
+  if (rss.status === "fulfilled") rss.value.forEach((it) => slugs.add(it.slug));
   if (films.status === "rejected" && rss.status === "rejected") throw films.reason;
   await cache.set(key, [...slugs], WATCHED_SEED_TTL);
   return slugs;
@@ -192,6 +222,7 @@ export function parseFilmPage(html) {
   if (desc) description = decode(desc[1]);
   const bg = html.match(/<meta property="og:image" content="([^"]*)"/);
   const rating = html.match(/<meta name="twitter:data2" content="([\d.]+) out of 5"/);
+  const genres = [...new Set([...html.matchAll(/href="\/films\/genre\/([a-z-]+)\/"/g)].map((m) => m[1]))];
   return {
     imdb: imdb ? imdb[1] : null,
     tmdb: tmdbId ? +tmdbId[1] : null,
@@ -200,12 +231,13 @@ export function parseFilmPage(html) {
     background: bg ? decode(bg[1]) : null,
     description,
     rating: rating ? Math.round(parseFloat(rating[1]) * 10) / 10 : null,
+    genres,
   };
 }
 
 // slug -> { imdb, tmdb, type, poster, ... }  (cached for a long time)
 export async function getFilm(slug) {
-  const key = `film:${slug}`;
+  const key = `film2:${slug}`;
   const cached = await cache.get(key);
   if (cached) return cached;
   const info = parseFilmPage(await get(`/film/${encodeURIComponent(slug)}/`));
@@ -214,7 +246,7 @@ export async function getFilm(slug) {
 }
 
 export async function peekFilm(slug) {
-  return cache.get(`film:${slug}`);
+  return cache.get(`film2:${slug}`);
 }
 
 export { mapLimit };

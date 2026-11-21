@@ -1,6 +1,6 @@
 {
   "name": "letterboxd-stremio-addon",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "Letterboxd watchlists and lists as Stremio catalogs, with ratings and hide-watched. Multi-user, free to host.",
   "type": "module",
   "license": "MIT",

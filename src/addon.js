@@ -4,6 +4,7 @@
 import {
   getWatchlist,
   getList,
+  getDiary,
   getFilm,
   peekFilm,
   getWatchedSeed,
@@ -15,36 +16,47 @@ import {
 import { configurePage } from "./configure.js";
 import { ADDON, LANGS, DEFAULT_LANG, addonStrings, fmt, formatRating } from "./i18n.js";
 
-const VERSION = "1.2.0";
+const VERSION = "1.3.0";
 const PAGE_SIZE = 100;
 
 // Sort keys; labels come from i18n.js in the user's language.
 export const SORTS = ADDON.en.sorts;
 
-const sortLabels = (lang, isList) => {
+// Catalog kinds: "watchlist" | "list" | "diary".
+const sortLabels = (lang, kind) => {
   const t = addonStrings(lang);
-  return isList ? { ...t.sorts, ...t.listSorts } : t.sorts;
+  return { ...t.sorts, ...(kind === "list" ? t.listSorts : kind === "diary" ? t.diarySorts : {}) };
 };
 
-// Stremio sends back the label picked in the dropdown; match it in any language.
-function sortKeyFromLabel(label, lang, isList) {
-  if (!label) return null;
-  const own = sortLabels(lang, isList);
-  const hit = Object.keys(own).find((k) => own[k] === label);
-  if (hit) return hit;
-  for (const l of Object.keys(LANGS)) {
-    for (const isL of [false, true]) {
-      const labels = sortLabels(l, isL);
-      const k = Object.keys(labels).find((key) => labels[key] === label);
-      if (k) return k;
+// Stremio's Discover page shows one dropdown per catalog (the "genre" extra),
+// so it carries both: sort choices (marked with ↕) followed by genres.
+const SORT_MARK = "↕ ";
+const menuOptions = (lang, kind) => [
+  ...Object.values(sortLabels(lang, kind)).map((l) => SORT_MARK + l),
+  ...Object.values(addonStrings(lang).genres),
+];
+
+// Parses the dropdown value Stremio sends back, in any language. Unmarked
+// sort labels from v1.1/1.2 installs are understood too.
+function parseMenu(value, lang, kind) {
+  if (!value) return {};
+  const v = value.startsWith(SORT_MARK) ? value.slice(SORT_MARK.length) : value;
+  for (const l of [lang, ...Object.keys(LANGS).filter((x) => x !== lang)]) {
+    for (const k of [kind, "watchlist", "list", "diary"]) {
+      const labels = sortLabels(l, k);
+      const key = Object.keys(labels).find((x) => labels[x] === v);
+      if (key) return { sort: key };
     }
+    const genres = addonStrings(l).genres;
+    const genre = Object.keys(genres).find((x) => genres[x] === v);
+    if (genre) return { genre };
   }
-  return null;
+  return {};
 }
 
 // ---------- config (base64url JSON in the URL path) ----------
 // { users: ["dave"], lists: [{u:"dave", s:"imdb-top-250", n:"IMDb Top 250"}],
-//   me: "dave", hideWatched: true, detailRating: false, sort: "added", lang: "en" }
+//   diary: true, me: "dave", hideWatched: true, detailRating: false, sort: "added", lang: "en" }
 
 const USERNAME_RE = /^[a-z0-9_]{1,40}$/i;
 const SLUG_RE = /^[a-z0-9][a-z0-9-]{0,120}$/i;
@@ -81,6 +93,7 @@ export function decodeConfig(str) {
     return {
       users,
       lists,
+      diary: !!(cfg.diary && users.length),
       me,
       hideWatched: !!(me && cfg.hideWatched),
       detailRating: !!cfg.detailRating,
@@ -101,7 +114,7 @@ export function parseListInput(input) {
 
 // ---------- manifest ----------
 
-function catalogDef(id, name, labels) {
+function catalogDef(id, name, options) {
   return {
     type: "movie",
     id,
@@ -109,7 +122,7 @@ function catalogDef(id, name, labels) {
     extra: [
       { name: "skip", isRequired: false },
       // Stremio shows "genre" as a dropdown in Discover; we use it for sorting.
-      { name: "genre", isRequired: false, options: Object.values(labels) },
+      { name: "genre", isRequired: false, options },
     ],
   };
 }
@@ -129,12 +142,18 @@ function manifest(cfg) {
   };
   if (!cfg) return base;
   const t = addonStrings(cfg.lang);
-  const multi = cfg.users.length > 1 || cfg.lists.length > 0;
+  const multi = cfg.users.length > 1 || cfg.lists.length > 0 || cfg.diary;
+  const solo = cfg.users.length === 1 && !cfg.lists.length;
   base.catalogs = [
     ...cfg.users.map((u) =>
-      catalogDef(`lbxd-watchlist-${u}`, multi ? fmt(t.watchlistOf, { u }) : t.watchlist, sortLabels(cfg.lang, false))
+      catalogDef(`lbxd-watchlist-${u}`, multi ? fmt(t.watchlistOf, { u }) : t.watchlist, menuOptions(cfg.lang, "watchlist"))
     ),
-    ...cfg.lists.map((l) => catalogDef(`lbxd-list-${l.u}~${l.s}`, l.n, sortLabels(cfg.lang, true))),
+    ...(cfg.diary
+      ? cfg.users.map((u) =>
+          catalogDef(`lbxd-diary-${u}`, solo ? t.diary : fmt(t.diaryOf, { u }), menuOptions(cfg.lang, "diary"))
+        )
+      : []),
+    ...cfg.lists.map((l) => catalogDef(`lbxd-list-${l.u}~${l.s}`, l.n, menuOptions(cfg.lang, "list"))),
   ];
   base.description =
     "Letterboxd · " +
@@ -181,9 +200,30 @@ function sortItems(items, sort, seedStr) {
 
 const ratingText = (r, lang) => fmt(addonStrings(lang).rating, { r: formatRating(r, lang) });
 
+// 3.5 -> "★★★½"
+const starString = (r) => "★".repeat(Math.floor(r)) + (r % 1 ? "½" : "");
+
+function diaryLine(item, lang) {
+  const parts = [];
+  if (item.userRating) parts.push(starString(item.userRating));
+  if (item.liked) parts.push("♥");
+  if (item.watched) {
+    try {
+      const locale = { zh: "zh-CN" }[lang] || lang;
+      parts.push(new Intl.DateTimeFormat(locale, { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(item.watched)));
+    } catch {
+      parts.push(item.watched);
+    }
+  }
+  return parts.join(" · ");
+}
+
 function toMeta(item, film, cfg) {
   const releaseInfo = item.year ? String(item.year) : undefined;
-  const description = film && film.rating ? ratingText(film.rating, cfg.lang) : undefined;
+  const lines = [];
+  if (item.watched) lines.push(diaryLine(item, cfg.lang));
+  if (film && film.rating) lines.push(ratingText(film.rating, cfg.lang));
+  const description = lines.length ? lines.join("\n") : undefined;
   if (film && film.imdb && !cfg.detailRating) {
     return {
       id: film.imdb,
@@ -219,10 +259,13 @@ function makeBudget(opts, max) {
 async function loadSource(cfg, id) {
   let m;
   if ((m = id.match(/^lbxd-watchlist-(.+)$/)) && cfg.users.includes(m[1])) {
-    return { items: await getWatchlist(m[1]), isList: false, seed: m[1] };
+    return { items: await getWatchlist(m[1]), kind: "watchlist", seed: m[1] };
+  }
+  if ((m = id.match(/^lbxd-diary-(.+)$/)) && cfg.diary && cfg.users.includes(m[1])) {
+    return { items: await getDiary(m[1]), kind: "diary", seed: id };
   }
   if ((m = id.match(/^lbxd-list-([^~]+)~(.+)$/)) && cfg.lists.some((l) => l.u === m[1] && l.s === m[2])) {
-    return { items: (await getList(m[1], m[2])).items, isList: true, seed: id };
+    return { items: (await getList(m[1], m[2])).items, kind: "list", seed: id };
   }
   return null;
 }
@@ -231,53 +274,72 @@ async function catalog(cfg, id, extra, opts) {
   const src = await loadSource(cfg, id);
   if (!src) return { metas: [], complete: true };
 
-  const sortKey = sortKeyFromLabel(extra.genre, cfg.lang, src.isList) || cfg.sort;
+  const menu = parseMenu(extra.genre, cfg.lang, src.kind);
+  const sortKey = menu.sort || cfg.sort;
+  const genre = menu.genre || null;
   const skip = Math.max(0, parseInt(extra.skip || "0", 10) || 0);
-  let all = sortItems(src.items, sortKey, src.seed);
+  let all = sortItems(src.items, src.kind === "diary" && !menu.sort ? "added" : sortKey, src.seed);
   const spendFilm = makeBudget(opts, opts.maxResolvePerRequest);
   const spendWatched = makeBudget(opts, opts.maxWatchedPerRequest);
   let complete = true;
 
-  // Hide watched: drop everything already known to be watched before paging,
-  // so `skip` stays consistent across requests.
+  // Hide watched (never on a diary, which is the user's own watched films):
+  // drop everything already known to be watched before paging.
   let watched = null;
-  if (cfg.hideWatched) {
+  if (cfg.hideWatched && src.kind !== "diary") {
     watched = await getWatchedSeed(cfg.me).catch(() => new Set());
     const known = await Promise.all(all.map((it) => (watched.has(it.slug) ? true : peekWatched(cfg.me, it.slug))));
     all = all.filter((_, i) => known[i] !== true);
   }
 
-  // Walk forward from `skip` until we have a full page. Unknown watched status
-  // is checked (within budget); if the budget runs out the film is shown.
+  // Genre: drop films already known to be in another genre before paging.
+  if (genre) {
+    const films = await Promise.all(all.map((it) => peekFilm(it.slug)));
+    all = all.filter((_, i) => !films[i] || (films[i].genres || []).includes(genre));
+  }
+
+  const isWatched = async (it) => {
+    const known = await peekWatched(cfg.me, it.slug);
+    if (known != null) return known;
+    if (!spendWatched()) return (complete = false), false; // unknown -> shown
+    return checkWatched(cfg.me, it.slug).catch(() => ((complete = false), false));
+  };
+  const filmOf = async (it) => {
+    const known = await peekFilm(it.slug);
+    if (known) return known;
+    if (!spendFilm()) return null;
+    return getFilm(it.slug).catch(() => null);
+  };
+
+  // Walk forward from `skip` until the page is full. Films whose genre can't be
+  // checked within budget are left out for now (the response is then cached
+  // briefly, and the background warm-up fills them in).
   const page = [];
   let i = skip;
   while (page.length < PAGE_SIZE && i < all.length) {
     const chunk = all.slice(i, i + (PAGE_SIZE - page.length));
     i += chunk.length;
     const keep = await mapLimit(chunk, 8, async (it) => {
-      if (!watched) return true;
-      if ((await peekWatched(cfg.me, it.slug)) != null) return !(await peekWatched(cfg.me, it.slug));
-      if (!spendWatched()) return (complete = false), true;
-      try {
-        return !(await checkWatched(cfg.me, it.slug));
-      } catch {
-        return (complete = false), true;
-      }
+      if (watched && (await isWatched(it))) return false;
+      if (!genre) return true;
+      const film = await filmOf(it);
+      if (!film) return (complete = false), false;
+      return (film.genres || []).includes(genre);
     });
     chunk.forEach((it, k) => keep[k] && page.push(it));
   }
 
   const metas = await mapLimit(page, 8, async (item) => {
-    let film = await peekFilm(item.slug);
-    if (!film && spendFilm()) film = await getFilm(item.slug).catch(() => null);
+    const film = await filmOf(item);
     if (!film) complete = false;
     return toMeta(item, film, cfg);
   });
 
-  // Warm the cache for the next pages in the background so later requests
-  // are instant and fully resolved.
+  // Warm the cache in the background so later requests are instant and
+  // complete. With a genre filter the whole list needs film info.
   if (opts.waitUntil) {
-    opts.waitUntil(warm(all.slice(skip, skip + PAGE_SIZE * 3), cfg, opts.maxBackgroundResolve));
+    const ahead = genre ? all.slice(skip) : all.slice(skip, skip + PAGE_SIZE * 3);
+    opts.waitUntil(warm(ahead, { ...cfg, hideWatched: !!watched }, opts.maxBackgroundResolve));
   }
 
   return { metas, complete };
