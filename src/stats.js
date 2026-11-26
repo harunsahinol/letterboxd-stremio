@@ -13,23 +13,26 @@ import { LANGS } from "./i18n.js";
 export const FEATURES = { d: "diary", l: "lists", h: "hide", m: "me" };
 
 // The only facts ever recorded about an install: its language and which
-// features are switched on. Encoded as a short tag, e.g. "en.dlm".
-export function installTag(cfg) {
+// features are switched on, plus the country the request came from (as the
+// host reports it; never the IP). Encoded as a short tag, e.g. "en.dlm.TR".
+export function installTag(cfg, country) {
   const lang = LANGS[cfg.lang] ? cfg.lang : "en";
   const flags =
     (cfg.diary ? "d" : "") +
     (cfg.lists && cfg.lists.length ? "l" : "") +
     (cfg.me && cfg.hideWatched ? "h" : "") +
     (cfg.me ? "m" : "");
-  return `${lang}.${flags || "-"}`;
+  const cc = /^[A-Z]{2}$/.test(country || "") ? country : "XX";
+  return `${lang}.${flags || "-"}.${cc}`;
 }
 
 // Turns the tags seen on one day into that day's totals.
 export function summarizeDay(day, tags, views) {
-  const out = { day, installs: tags.length, views, langs: {}, features: { diary: 0, lists: 0, hide: 0, me: 0 } };
+  const out = { day, installs: tags.length, views, langs: {}, countries: {}, features: { diary: 0, lists: 0, hide: 0, me: 0 } };
   for (const tag of tags) {
-    const [lang, flags = ""] = tag.split(".");
+    const [lang, flags = "", cc] = tag.split(".");
     out.langs[lang] = (out.langs[lang] || 0) + 1;
+    if (cc) out.countries[cc] = (out.countries[cc] || 0) + 1;
     for (const f of flags) if (FEATURES[f]) out.features[FEATURES[f]]++;
   }
   return out;
@@ -58,6 +61,18 @@ export function statsPage(days, today) {
     return acc;
   };
   const langs = Object.entries(sum((d) => d.langs)).sort((a, b) => b[1] - a[1]);
+  const allCountries = Object.entries(sum((d) => d.countries || {})).sort((a, b) => b[1] - a[1]);
+  const known = allCountries.filter(([k]) => k !== "XX");
+  const countries = known.slice(0, 10);
+  const otherCountries = winTotal - countries.reduce((a, [, n]) => a + n, 0);
+  let regionName;
+  try {
+    const dn = new Intl.DisplayNames(["en"], { type: "region" });
+    regionName = (cc) => dn.of(cc) || cc;
+  } catch {
+    regionName = (cc) => cc;
+  }
+  const flag = (cc) => String.fromCodePoint(...[...cc].map((c) => 0x1f1a5 + c.charCodeAt(0)));
   const feats = sum((d) => d.features);
   const pct = (n) => (winTotal ? Math.round((n / winTotal) * 100) : 0);
 
@@ -97,7 +112,7 @@ export function statsPage(days, today) {
   const labelEvery = Math.max(1, Math.ceil(series.length / 6));
   const xlabels = series
     .map((d, i) =>
-      i % labelEvery === 0 || i === series.length - 1
+      i % labelEvery === 0 || (i === series.length - 1 && i % labelEvery >= labelEvery / 2)
         ? `<text x="${padL + i * slot + slot / 2}" y="${H - 6}" class="ax" text-anchor="middle">${fmtDay(d.day)}</text>`
         : ""
     )
@@ -140,7 +155,7 @@ export function statsPage(days, today) {
   .bar .hit { fill:transparent; } .bar:hover path { opacity:.8; } .bar:hover .hit { fill:rgba(255,255,255,.04); }
   #tip { position:absolute; pointer-events:none; background:#0d1013; border:1px solid var(--line); border-radius:8px; padding:6px 10px; font-size:13px; white-space:nowrap; display:none; transform:translate(-50%,-100%); }
   .two { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
-  .row { display:grid; grid-template-columns:90px 1fr 44px; align-items:center; gap:10px; margin:8px 0; font-size:14px; }
+  .row { display:grid; grid-template-columns:110px 1fr 44px; align-items:center; gap:10px; margin:8px 0; font-size:14px; }
   .rl { color:var(--text); } .rv { text-align:right; color:var(--muted); font-variant-numeric:tabular-nums; }
   .track { height:8px; background:var(--grid); border-radius:4px; overflow:hidden; } .track i { display:block; height:100%; background:var(--green); border-radius:4px; }
   .note { color:var(--muted); font-size:13px; margin:4px 0 0; }
@@ -148,7 +163,8 @@ export function statsPage(days, today) {
   table { width:100%; border-collapse:collapse; margin-top:8px; font-size:14px; font-variant-numeric:tabular-nums; }
   td, th { text-align:left; padding:6px 4px; border-bottom:1px solid var(--line); } th { color:var(--muted); font-weight:500; }
   .empty { color:var(--muted); padding:24px 0; text-align:center; }
-  @media (max-width:640px) { .tiles { grid-template-columns:repeat(2,1fr); } .two { grid-template-columns:1fr; } }
+  .wide .row { grid-template-columns:200px 1fr 44px; }
+  @media (max-width:640px) { .wide .row { grid-template-columns:150px 1fr 44px; } .tiles { grid-template-columns:repeat(2,1fr); } .two { grid-template-columns:1fr; } }
 </style>
 </head>
 <body>
@@ -188,11 +204,20 @@ export function statsPage(days, today) {
       }
     </div>
   </div>
-  <p class="note">Languages and features: share of installs ${last7.length > 1 ? `over the last ${last7.length} days` : last7.length ? "yesterday" : "today"}.</p>
+  <div class="card wide" style="margin-top:16px">
+    <h2>Countries</h2>
+    ${
+      countries.length
+        ? countries.map(([cc, n]) => meter(`${flag(cc)} ${esc(regionName(cc))}`, n)).join("") +
+          (otherCountries > 0 ? meter(known.length > 10 ? "Other / unknown" : "Unknown", otherCountries) : "")
+        : `<div class="empty">No data yet</div>`
+    }
+  </div>
+  <p class="note">Languages, features and countries: share of installs ${last7.length > 1 ? `over the last ${last7.length} days` : last7.length ? "yesterday" : "today"}.</p>
 
   <div class="card" id="how" style="margin-top:16px">
     <h2>How this is counted</h2>
-    <p class="note">An install is counted once per day when Stremio asks the addon for a catalog. To recognise the same install within a day, the addon keeps a keyed hash of its install link that changes every day, and deletes it when the day is added to the totals. Nothing else is stored: no usernames, list names, IP addresses or devices. Page visits are a plain count of configure page loads.</p>
+    <p class="note">An install is counted once per day when Stremio asks the addon for a catalog. To recognise the same install within a day, the addon keeps a keyed hash of its install link that changes every day, and deletes it when the day is added to the totals. Besides that, only the install's language, which features are on, and the country Netlify reports for the request are kept. No usernames, list names, IP addresses or devices are stored. Countries reflect where requests come from, so VPN users show up under their VPN's country. Page visits are a plain count of configure page loads.</p>
     <p class="note">Installs that weren't opened on a given day aren't counted, so the total number of installs is higher. The code is <a href="https://github.com/harunsahinol/letterboxd-stremio/blob/main/src/stats.js">open source</a>.</p>
   </div>
 </main>

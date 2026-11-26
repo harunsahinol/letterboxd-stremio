@@ -526,7 +526,7 @@ export async function handle(request, options = {}) {
     const [, cfgStr, rest] = path.match(/^\/([^/]+)(\/.*)$/) || [];
     const cfg = cfgStr ? decodeConfig(cfgStr) : null;
     if (!cfg) return json({ error: "invalid config" }, 0, 404);
-    if (opts.track && rest.startsWith("/catalog/")) opts.track({ type: "install", key: cfgStr, tag: installTag(cfg) });
+    if (opts.track && rest.startsWith("/catalog/")) opts.track({ type: "install", key: cfgStr, tag: installTag(cfg, opts.country) });
 
     if (rest === "/manifest.json") return json(manifest(cfg), 3600);
 

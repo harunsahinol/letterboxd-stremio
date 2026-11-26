@@ -36,7 +36,7 @@ Free and open source. No account, no password, no API key.
 
 - 🌍 **5 languages** — English, Türkçe, Español, Français, 中文. Catalog names, menus and ratings follow your choice.
 - 🔌 **Plays nicely with your other addons** — films use IMDb IDs, so Cinemeta and your stream addons just work.
-- 🔒 **Private by design** — no accounts and no personal data. Your settings live only in your own install link. The public site keeps only anonymous daily totals, which anyone can see at [/stats](https://letterboxd-stremio.netlify.app/stats).
+- 🔒 **Private by design** — no accounts and no personal data. Your settings live only in your own install link. The public site keeps only anonymous daily totals (installs, languages, features, countries), which anyone can see at [/stats](https://letterboxd-stremio.netlify.app/stats).
 - 🆓 **Free forever** — MIT licensed, and anyone can run their own copy for free in one click.
 
 ## Install
@@ -149,7 +149,7 @@ Letterboxd watchlist'lerini, listelerini ve günlüklerini Stremio'da katalog ol
 - ★ **Letterboxd puanı** — Her film Keşfet önizlemesinde Letterboxd ortalamasıyla görünür; istersen film sayfasında da.
 - 🌍 **5 dil** — İngilizce, Türkçe, İspanyolca, Fransızca, Çince. Katalog adları, menüler ve puanlar seçtiğin dilde gelir.
 - 🔌 Filmler IMDb ID'siyle döner; Cinemeta ve stream eklentilerin olduğu gibi çalışır.
-- 🔒 Hesap ve kişisel veri yok. Ayarların sadece kendi kurulum bağlantında durur. Herkese açık sitede yalnızca isimsiz günlük toplamlar tutulur; bunları herkes [/stats](https://letterboxd-stremio.netlify.app/stats) sayfasında görebilir.
+- 🔒 Hesap ve kişisel veri yok. Ayarların sadece kendi kurulum bağlantında durur. Herkese açık sitede yalnızca isimsiz günlük toplamlar (kurulum, dil, özellik, ülke) tutulur; bunları herkes [/stats](https://letterboxd-stremio.netlify.app/stats) sayfasında görebilir.
 
 ### Kurulum
 

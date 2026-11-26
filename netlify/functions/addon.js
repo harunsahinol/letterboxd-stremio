@@ -8,6 +8,7 @@ export default async (request, context) => {
     // Anonymous usage counts, only when STATS_SECRET is set (see netlify/stats-store.js).
     track: statsEnabled ? (ev) => later(track(ev)) : null,
     stats: statsEnabled ? readStats : null,
+    country: context && context.geo && context.geo.country ? context.geo.country.code : null,
     maxResolvePerRequest: 100,
     maxBackgroundResolve: 150,
     // Netlify's free plan stops synchronous functions after 10 s; stop fetching

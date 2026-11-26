@@ -58,7 +58,14 @@ async function listKeys(s, prefix) {
 
 async function countDay(s, day) {
   const [seen, views] = await Promise.all([listKeys(s, `seen/${day}/`), listKeys(s, `view/${day}/`)]);
-  const tags = seen.map((k) => k.split("/")[2]);
+  // One install per hash, even if its tag changed during the day (new
+  // settings, a VPN switching country): keep the first tag seen.
+  const byHash = new Map();
+  for (const k of seen) {
+    const [, , tag, h] = k.split("/");
+    if (!byHash.has(h)) byHash.set(h, tag);
+  }
+  const tags = [...byHash.values()];
   return { summary: summarizeDay(day, tags, views.length), keys: [...seen, ...views] };
 }
 
