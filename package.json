@@ -25,5 +25,8 @@
     "test": "node test/smoke.js",
     "deploy:cf": "npx wrangler deploy",
     "deploy:netlify": "npx netlify-cli deploy --prod"
+  },
+  "dependencies": {
+    "@netlify/blobs": "11.1.12"
   }
 }

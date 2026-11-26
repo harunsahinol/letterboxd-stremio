@@ -1,8 +1,13 @@
 // Netlify Functions (v2, Web Request/Response) adapter. Serves every path.
 import { handle } from "../../src/addon.js";
+import { track, readStats, statsEnabled } from "../stats-store.js";
 
 export default async (request, context) => {
+  const later = (p) => (context && context.waitUntil ? context.waitUntil(p.catch(() => {})) : p.catch(() => {}));
   const response = await handle(request, {
+    // Anonymous usage counts, only when STATS_SECRET is set (see netlify/stats-store.js).
+    track: statsEnabled ? (ev) => later(track(ev)) : null,
+    stats: statsEnabled ? readStats : null,
     maxResolvePerRequest: 100,
     maxBackgroundResolve: 150,
     // Netlify's free plan stops synchronous functions after 10 s; stop fetching

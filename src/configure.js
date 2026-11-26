@@ -198,6 +198,8 @@ export function configurePage(origin, cfg) {
 const ORIGIN = ${JSON.stringify(origin)};
 const INITIAL = ${initial};
 const I18N = ${i18n};
+// Anonymous page-visit count (a plain counter, see /stats). Does nothing on servers without stats.
+try { navigator.sendBeacon(ORIGIN + "/api/hit"); } catch {}
 const fmt = (str, v) => str.replace(/\\{(\\w+)\\}/g, (_, k) => (k in v ? v[k] : "{" + k + "}"));
 function detectLang() {
   for (const l of navigator.languages || [navigator.language || "en"]) {

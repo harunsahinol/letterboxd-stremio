@@ -14,6 +14,7 @@ import {
   LetterboxdError,
 } from "./letterboxd.js";
 import { configurePage } from "./configure.js";
+import { installTag, statsPage } from "./stats.js";
 import { ADDON, LANGS, DEFAULT_LANG, addonStrings, fmt, formatRating } from "./i18n.js";
 
 const VERSION = "1.4.0";
@@ -483,6 +484,21 @@ export async function handle(request, options = {}) {
 
     if (path === "/manifest.json") return json(manifest(null), 3600);
 
+    // Anonymous usage stats. Only active when the host passes `track`/`stats`
+    // (see netlify/stats-store.js); otherwise these are no-ops.
+    if (path === "/api/hit") {
+      if (opts.track) opts.track({ type: "view" });
+      return new Response(null, { status: 204, headers: { ...CORS, "Cache-Control": "no-store" } });
+    }
+    if (path === "/stats" || path === "/stats.json") {
+      if (!opts.stats) return json({ error: "stats are not enabled on this server" }, 0, 404);
+      const { days, today } = await opts.stats();
+      if (path === "/stats.json") return json({ today, days }, 300);
+      return new Response(statsPage(days, today), {
+        headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=300" },
+      });
+    }
+
     // Used by the configure page to validate a username.
     if (path === "/api/check") {
       const u = (url.searchParams.get("u") || "").trim().toLowerCase();
@@ -510,6 +526,7 @@ export async function handle(request, options = {}) {
     const [, cfgStr, rest] = path.match(/^\/([^/]+)(\/.*)$/) || [];
     const cfg = cfgStr ? decodeConfig(cfgStr) : null;
     if (!cfg) return json({ error: "invalid config" }, 0, 404);
+    if (opts.track && rest.startsWith("/catalog/")) opts.track({ type: "install", key: cfgStr, tag: installTag(cfg) });
 
     if (rest === "/manifest.json") return json(manifest(cfg), 3600);
 

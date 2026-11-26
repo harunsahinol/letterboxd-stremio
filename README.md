@@ -7,7 +7,7 @@ Free and open source. No account, no password, no API key.
 
 <a href="https://letterboxd-stremio.netlify.app/configure"><img src="https://img.shields.io/badge/Install%20the%20addon-00e054?style=for-the-badge&logoColor=white" alt="Install the addon" height="36"></a>
 
-[![Hosted on Netlify](https://img.shields.io/badge/hosted%20on-Netlify-00C7B7?logo=netlify&logoColor=white)](https://letterboxd-stremio.netlify.app) [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE) ![Dependencies: 0](https://img.shields.io/badge/dependencies-0-brightgreen) ![Languages](https://img.shields.io/badge/languages-EN%20%C2%B7%20TR%20%C2%B7%20ES%20%C2%B7%20FR%20%C2%B7%20%E4%B8%AD%E6%96%87-ff8000)
+[![Hosted on Netlify](https://img.shields.io/badge/hosted%20on-Netlify-00C7B7?logo=netlify&logoColor=white)](https://letterboxd-stremio.netlify.app) [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE) ![Core dependencies: 0](https://img.shields.io/badge/core%20dependencies-0-brightgreen) ![Languages](https://img.shields.io/badge/languages-EN%20%C2%B7%20TR%20%C2%B7%20ES%20%C2%B7%20FR%20%C2%B7%20%E4%B8%AD%E6%96%87-ff8000)
 
 **English** · [Türkçe](#türkçe)
 
@@ -36,7 +36,7 @@ Free and open source. No account, no password, no API key.
 
 - 🌍 **5 languages** — English, Türkçe, Español, Français, 中文. Catalog names, menus and ratings follow your choice.
 - 🔌 **Plays nicely with your other addons** — films use IMDb IDs, so Cinemeta and your stream addons just work.
-- 🔒 **Private by design** — no database, no accounts, no tracking. Your settings live only in your own install link.
+- 🔒 **Private by design** — no accounts and no personal data. Your settings live only in your own install link. The public site keeps only anonymous daily totals, which anyone can see at [/stats](https://letterboxd-stremio.netlify.app/stats).
 - 🆓 **Free forever** — MIT licensed, and anyone can run their own copy for free in one click.
 
 ## Install
@@ -117,6 +117,7 @@ Stremio ──► /<settings>/catalog/movie/lbxd-watchlist-<user>.json
 | [`src/i18n.js`](src/i18n.js) | All translations — add or fix a language here |
 | [`src/cache.js`](src/cache.js) | In-memory LRU (+ Cache API on Workers) |
 | [`netlify/functions/addon.js`](netlify/functions/addon.js) | Netlify adapter |
+| [`src/stats.js`](src/stats.js), [`netlify/stats-store.js`](netlify/stats-store.js) | Anonymous daily totals and the `/stats` page. Off unless `STATS_SECRET` is set, so your own copy counts nothing by default. |
 | [`src/server.js`](src/server.js) | Plain Node server |
 | [`src/worker.js`](src/worker.js) | Cloudflare Workers adapter |
 
@@ -148,7 +149,7 @@ Letterboxd watchlist'lerini, listelerini ve günlüklerini Stremio'da katalog ol
 - ★ **Letterboxd puanı** — Her film Keşfet önizlemesinde Letterboxd ortalamasıyla görünür; istersen film sayfasında da.
 - 🌍 **5 dil** — İngilizce, Türkçe, İspanyolca, Fransızca, Çince. Katalog adları, menüler ve puanlar seçtiğin dilde gelir.
 - 🔌 Filmler IMDb ID'siyle döner; Cinemeta ve stream eklentilerin olduğu gibi çalışır.
-- 🔒 Veritabanı, hesap, takip yok. Ayarların sadece kendi kurulum bağlantında durur.
+- 🔒 Hesap ve kişisel veri yok. Ayarların sadece kendi kurulum bağlantında durur. Herkese açık sitede yalnızca isimsiz günlük toplamlar tutulur; bunları herkes [/stats](https://letterboxd-stremio.netlify.app/stats) sayfasında görebilir.
 
 ### Kurulum
 
